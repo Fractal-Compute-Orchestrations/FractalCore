@@ -1,0 +1,1553 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FRACTAL — Federated Server</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Genos:ital,wght@0,100..900;1,100..900&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --scale: 1.6;
+            --ink: #0a0a0a;
+            --paper: #ffffff;
+            --muted: #888;
+            --light: #e0e0e0;
+            --mono: "Genos", sans-serif;
+            --fs-xxs: calc(var(--scale)*8px);
+            --fs-xs: calc(var(--scale)*9px);
+            --fs-sm: calc(var(--scale)*10px);
+            --fs-md: calc(var(--scale)*11px);
+            --fs-base: calc(var(--scale)*12px);
+            --fs-btn: calc(var(--scale)*9px);
+            --fs-hero: calc(var(--scale)*80px);
+        }
+
+        html,
+        body {
+            background: var(--paper);
+            color: var(--ink);
+            font-family: var(--mono);
+            font-size: var(--fs-base);
+            letter-spacing: 0.12em;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .finished-banner {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: var(--ink);
+            color: var(--paper);
+            text-align: center;
+            padding: 10px;
+            font-size: var(--fs-xs);
+            letter-spacing: 0.4em;
+            text-transform: uppercase;
+            z-index: 500;
+        }
+
+        .finished-banner.show {
+            display: block;
+        }
+
+        .chrome {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 22px 44px;
+            border-bottom: 1px solid var(--ink);
+            background: var(--paper);
+            z-index: 200;
+        }
+
+        .chrome-title {
+            font-size: var(--fs-base);
+            font-weight: 700;
+            letter-spacing: 0.55em;
+            text-transform: uppercase;
+        }
+
+        .chrome-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .live-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: var(--fs-xs);
+            letter-spacing: 0.25em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .live-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--ink);
+            border: 1px solid transparent;
+            animation: blink 2.4s ease-in-out infinite;
+            flex-shrink: 0;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: 0.15
+            }
+        }
+
+        .live-pill.offline .live-dot {
+            background: transparent;
+            border-color: var(--muted);
+            animation: none;
+        }
+
+        .live-pill.offline .live-label {
+            color: #bbb;
+        }
+
+        .live-pill.online .live-label {
+            color: var(--muted);
+        }
+
+        .chrome-btn {
+            font-family: var(--mono);
+            font-size: var(--fs-btn);
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            padding: 7px 16px;
+            border: 1px solid var(--ink);
+            background: transparent;
+            color: var(--ink);
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+            white-space: nowrap;
+        }
+
+        .chrome-btn:hover {
+            background: var(--ink);
+            color: var(--paper);
+        }
+
+        .chrome-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .chrome-btn:disabled:hover {
+            background: transparent;
+            color: var(--ink);
+        }
+
+        .page {
+            padding: 100px 44px 80px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .hero {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            padding-bottom: 32px;
+            border-bottom: 1px solid var(--ink);
+            margin-bottom: 52px;
+        }
+
+        .hero-round {
+            display: flex;
+            align-items: baseline;
+            gap: 24px;
+        }
+
+        .hero-num {
+            font-size: var(--fs-hero);
+            font-weight: 300;
+            letter-spacing: -0.03em;
+            line-height: 1;
+            transition: opacity 0.3s;
+        }
+
+        .hero-num.restarting {
+            opacity: 0.25;
+        }
+
+        .hero-sub {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            padding-bottom: 8px;
+        }
+
+        .hero-sub-label {
+            font-size: var(--fs-xs);
+            letter-spacing: 0.4em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .hero-sub-val {
+            font-size: var(--fs-md);
+            letter-spacing: 0.18em;
+        }
+
+        .hero-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+            padding-bottom: 4px;
+        }
+
+        .hero-agg {
+            font-size: var(--fs-xs);
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            padding: 8px 18px;
+            border: 1px solid var(--ink);
+            transition: background 0.4s, color 0.4s;
+        }
+
+        .hero-agg.complete,
+        .hero-agg.finished {
+            background: var(--ink);
+            color: var(--paper);
+        }
+
+        .rounds-badge {
+            font-size: var(--fs-xxs);
+            letter-spacing: 0.35em;
+            text-transform: uppercase;
+            padding: 5px 12px;
+            border: 1px solid var(--light);
+            color: var(--muted);
+            transition: border-color 0.3s, color 0.3s;
+        }
+
+        .rounds-badge.urgent {
+            border-color: var(--ink);
+            color: var(--ink);
+            font-weight: 600;
+        }
+
+        .fleet-badge {
+            font-size: var(--fs-xxs);
+            letter-spacing: 0.35em;
+            text-transform: uppercase;
+            padding: 5px 12px;
+            border: 1px solid var(--light);
+            color: var(--muted);
+            transition: border-color 0.3s, color 0.3s;
+        }
+
+        .fleet-badge.repeating {
+            border-color: var(--ink);
+            color: var(--ink);
+        }
+
+        .cols {
+            display: grid;
+            grid-template-columns: 1.1fr 1fr 1fr 1fr 1fr;
+            border-top: 1px solid var(--light);
+        }
+
+        .col {
+            padding: 0 24px 0 0;
+            border-right: 1px solid var(--light);
+        }
+
+        .col:first-child {
+            padding-left: 0;
+        }
+
+        .col:last-child {
+            border-right: none;
+            padding-left: 24px;
+            padding-right: 0;
+        }
+
+        .col:not(:first-child) {
+            padding-left: 24px;
+        }
+
+        .col-head {
+            font-size: var(--fs-xs);
+            letter-spacing: 0.4em;
+            text-transform: uppercase;
+            color: var(--muted);
+            padding: 20px 0 16px;
+            border-bottom: 1px solid var(--light);
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            padding: 13px 0;
+            border-bottom: 1px solid var(--light);
+        }
+
+        .metric:last-child {
+            border-bottom: none;
+        }
+
+        .metric-k {
+            font-size: var(--fs-sm);
+            letter-spacing: 0.18em;
+            color: var(--muted);
+        }
+
+        .metric-v {
+            font-size: var(--fs-sm);
+            font-weight: 500;
+            letter-spacing: 0.15em;
+        }
+
+        .metric-v.tag {
+            background: var(--ink);
+            color: var(--paper);
+            padding: 1px 7px;
+            font-size: var(--fs-xs);
+        }
+
+        .metric-v.bool-on {
+            color: var(--ink);
+            font-weight: 600;
+        }
+
+        .metric-v.bool-off {
+            color: #bbb;
+            font-weight: 400;
+        }
+
+        .bars {
+            padding: 20px 0 0;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+        }
+
+        .bar-head {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: var(--fs-xs);
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .bar-track {
+            height: 1px;
+            background: var(--light);
+            position: relative;
+        }
+
+        .bar-fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 1px;
+            background: var(--ink);
+            transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .bar-knob {
+            position: absolute;
+            top: -4px;
+            width: 1px;
+            height: 9px;
+            background: var(--ink);
+            transition: left 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .tree {
+            padding: 20px 0 0;
+        }
+
+        .tree-phase {
+            font-size: var(--fs-sm);
+            font-weight: 600;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            margin-bottom: 24px;
+        }
+
+        .tree-body {
+            display: flex;
+        }
+
+        .tree-spine {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 18px;
+            flex-shrink: 0;
+        }
+
+        .spine-line {
+            width: 1px;
+            flex: 1;
+            background: var(--ink);
+            min-height: 4px;
+        }
+
+        .spine-line.ghost {
+            background: var(--light);
+        }
+
+        .spine-node {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            border: 1px solid var(--ink);
+            flex-shrink: 0;
+            background: transparent;
+            transition: background 0.3s;
+            z-index: 1;
+        }
+
+        .spine-node.on {
+            background: var(--ink);
+        }
+
+        .tree-arms {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tree-arm {
+            display: flex;
+            align-items: center;
+            height: 44px;
+        }
+
+        .arm-h {
+            width: 18px;
+            height: 1px;
+            background: var(--ink);
+            flex-shrink: 0;
+        }
+
+        .arm-h.ghost {
+            background: var(--light);
+        }
+
+        .arm-label {
+            padding-left: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .arm-name {
+            font-size: var(--fs-xs);
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: var(--muted);
+            transition: color 0.3s;
+        }
+
+        .arm-name.on {
+            color: var(--ink);
+            font-weight: 500;
+        }
+
+        .arm-name.done {
+            color: var(--ink);
+        }
+
+        .arm-desc {
+            font-size: var(--fs-xxs);
+            letter-spacing: 0.15em;
+            color: #ccc;
+        }
+
+        .arm-desc.on {
+            color: #888;
+        }
+
+        .history-list {
+            padding: 16px 0 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .history-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 9px 0;
+            border-bottom: 1px solid var(--light);
+            animation: slideIn 0.25s ease;
+        }
+
+        .history-row:last-child {
+            border-bottom: none;
+        }
+
+        .history-round {
+            font-size: var(--fs-xs);
+            letter-spacing: 0.2em;
+            font-weight: 600;
+            color: var(--ink);
+        }
+
+        .history-time {
+            font-size: var(--fs-xxs);
+            letter-spacing: 0.1em;
+            color: #bbb;
+        }
+
+        .history-clients {
+            font-size: var(--fs-xxs);
+            letter-spacing: 0.15em;
+            color: var(--muted);
+        }
+
+        .history-empty {
+            padding: 28px 0;
+            font-size: var(--fs-xs);
+            letter-spacing: 0.3em;
+            color: #ccc;
+            text-transform: uppercase;
+        }
+
+        .device-list {
+            padding: 16px 0 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .device-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--light);
+            animation: slideIn 0.25s ease;
+        }
+
+        .device-row:last-child {
+            border-bottom: none;
+        }
+
+        .device-id {
+            font-size: var(--fs-xs);
+            letter-spacing: 0.15em;
+            color: var(--ink);
+            font-weight: 500;
+            max-width: 160px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .device-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--ink);
+            flex-shrink: 0;
+        }
+
+        .device-empty {
+            padding: 28px 0;
+            font-size: var(--fs-xs);
+            letter-spacing: 0.3em;
+            color: #ccc;
+            text-transform: uppercase;
+        }
+
+        .device-count-badge {
+            font-size: var(--fs-xxs);
+            letter-spacing: 0.3em;
+            color: var(--muted);
+            text-transform: uppercase;
+            padding-top: 14px;
+        }
+
+        .log-section {
+            margin-top: 52px;
+            border-top: 1px solid var(--ink);
+        }
+
+        .log-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--light);
+        }
+
+        .log-bar-title {
+            font-size: var(--fs-xs);
+            letter-spacing: 0.4em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .log-bar-right {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .log-bar-count {
+            font-size: var(--fs-xs);
+            letter-spacing: 0.2em;
+            color: var(--muted);
+        }
+
+        .log-clear-btn {
+            font-family: var(--mono);
+            font-size: var(--fs-xxs);
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            padding: 4px 10px;
+            border: 1px solid var(--light);
+            background: transparent;
+            color: var(--muted);
+            cursor: pointer;
+            transition: border-color 0.2s, color 0.2s;
+        }
+
+        .log-clear-btn:hover {
+            border-color: var(--ink);
+            color: var(--ink);
+        }
+
+        .log-body {
+            height: 180px;
+            overflow-y: auto;
+            scrollbar-width: none;
+        }
+
+        .log-body::-webkit-scrollbar {
+            display: none;
+        }
+
+        .log-row {
+            display: grid;
+            grid-template-columns: 64px 28px 1fr;
+            gap: 16px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--light);
+            animation: slideIn 0.2s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(3px)
+            }
+
+            to {
+                opacity: 1;
+                transform: none
+            }
+        }
+
+        .log-time {
+            font-size: var(--fs-xs);
+            letter-spacing: 0.1em;
+            color: #bbb;
+        }
+
+        .log-level {
+            font-size: var(--fs-xxs);
+            letter-spacing: 0.15em;
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+
+        .log-level.success {
+            color: var(--ink);
+            font-weight: 600;
+        }
+
+        .log-level.error {
+            color: var(--ink);
+            font-weight: 600;
+        }
+
+        .log-text {
+            font-size: var(--fs-xs);
+            letter-spacing: 0.1em;
+            color: var(--ink);
+        }
+
+        .log-empty {
+            padding: 32px 0;
+            font-size: var(--fs-xs);
+            letter-spacing: 0.3em;
+            color: #ccc;
+            text-transform: uppercase;
+        }
+
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            border-top: 1px solid var(--ink);
+            background: var(--paper);
+            padding: 14px 44px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 200;
+        }
+
+        .footer-chips {
+            display: flex;
+            gap: 32px;
+            flex-wrap: wrap;
+        }
+
+        .f-chip {
+            font-size: var(--fs-xs);
+            letter-spacing: 0.2em;
+            color: var(--muted);
+        }
+
+        .f-chip strong {
+            color: var(--ink);
+            font-weight: 500;
+        }
+
+        .footer-right {
+            font-size: var(--fs-xs);
+            letter-spacing: 0.25em;
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+
+        .drawer-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.5);
+            z-index: 300;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .drawer-overlay.open {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .drawer {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 480px;
+            background: var(--paper);
+            border-left: 1px solid var(--ink);
+            z-index: 400;
+            display: flex;
+            flex-direction: column;
+            transform: translateX(100%);
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .drawer.open {
+            transform: translateX(0);
+        }
+
+        .drawer-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 22px 32px;
+            border-bottom: 1px solid var(--ink);
+            flex-shrink: 0;
+        }
+
+        .drawer-title {
+            font-size: var(--fs-sm);
+            font-weight: 600;
+            letter-spacing: 0.5em;
+            text-transform: uppercase;
+        }
+
+        .drawer-close {
+            font-size: calc(var(--scale)*18px);
+            cursor: pointer;
+            opacity: 0.4;
+            transition: opacity 0.2s;
+            background: none;
+            border: none;
+            font-family: var(--mono);
+            color: var(--ink);
+            line-height: 1;
+        }
+
+        .drawer-close:hover {
+            opacity: 1;
+        }
+
+        .drawer-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 32px;
+            scrollbar-width: none;
+        }
+
+        .drawer-body::-webkit-scrollbar {
+            display: none;
+        }
+
+        .drawer-section-label {
+            font-size: var(--fs-xxs);
+            letter-spacing: 0.45em;
+            text-transform: uppercase;
+            color: var(--muted);
+            padding: 24px 0 10px;
+            border-bottom: 1px solid var(--light);
+            margin-bottom: 4px;
+        }
+
+        .scale-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--light);
+            gap: 16px;
+        }
+
+        .scale-label-group {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .scale-label {
+            font-size: var(--fs-sm);
+            letter-spacing: 0.18em;
+            color: var(--muted);
+        }
+
+        .scale-hint {
+            font-size: var(--fs-xxs);
+            letter-spacing: 0.12em;
+            color: #bbb;
+        }
+
+        .scale-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .scale-val {
+            font-size: var(--fs-sm);
+            letter-spacing: 0.15em;
+            font-weight: 500;
+            min-width: 30px;
+            text-align: right;
+        }
+
+        .scale-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 120px;
+            height: 1px;
+            background: var(--light);
+            outline: none;
+            cursor: pointer;
+        }
+
+        .scale-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: var(--ink);
+            cursor: pointer;
+            border: none;
+        }
+
+        .scale-slider::-moz-range-thumb {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: var(--ink);
+            cursor: pointer;
+            border: none;
+        }
+
+        .field {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            padding: 14px 0;
+            border-bottom: 1px solid var(--light);
+            gap: 16px;
+        }
+
+        .field-label {
+            font-size: var(--fs-sm);
+            letter-spacing: 0.18em;
+            color: var(--muted);
+            flex-shrink: 0;
+        }
+
+        .field-hint {
+            font-size: var(--fs-xxs);
+            letter-spacing: 0.12em;
+            color: #bbb;
+            margin-top: 2px;
+        }
+
+        .field-left {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+
+        .field-input {
+            font-family: var(--mono);
+            font-size: var(--fs-sm);
+            letter-spacing: 0.15em;
+            color: var(--ink);
+            border: 1px solid var(--light);
+            background: transparent;
+            padding: 5px 10px;
+            width: 120px;
+            text-align: right;
+            outline: none;
+            transition: border-color 0.2s;
+            -moz-appearance: textfield;
+        }
+
+        .field-input::-webkit-outer-spin-button,
+        .field-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+        }
+
+        .field-input:focus {
+            border-color: var(--ink);
+        }
+
+        .field-input.changed {
+            border-color: var(--ink);
+            background: #f8f8f8;
+        }
+
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 0;
+            border-bottom: 1px solid var(--light);
+            gap: 16px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 38px;
+            height: 20px;
+            flex-shrink: 0;
+            cursor: pointer;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+            position: absolute;
+        }
+
+        .toggle-track {
+            position: absolute;
+            inset: 0;
+            border: 1px solid var(--light);
+            background: transparent;
+            transition: background 0.25s, border-color 0.25s;
+        }
+
+        .toggle-thumb {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 12px;
+            height: 12px;
+            background: var(--light);
+            transition: left 0.25s, background 0.25s;
+        }
+
+        .toggle-switch input:checked~.toggle-track {
+            background: var(--ink);
+            border-color: var(--ink);
+        }
+
+        .toggle-switch input:checked~.toggle-thumb {
+            left: 21px;
+            background: var(--paper);
+        }
+
+        .drawer-note {
+            font-size: var(--fs-xxs);
+            letter-spacing: 0.15em;
+            color: #bbb;
+            line-height: 1.9;
+            padding: 20px 0;
+        }
+
+        .drawer-note strong {
+            color: var(--muted);
+        }
+
+        .drawer-foot {
+            border-top: 1px solid var(--ink);
+            padding: 20px 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .drawer-btn {
+            font-family: var(--mono);
+            font-size: var(--fs-btn);
+            letter-spacing: 0.35em;
+            text-transform: uppercase;
+            padding: 11px 20px;
+            border: 1px solid var(--ink);
+            background: transparent;
+            color: var(--ink);
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+            width: 100%;
+        }
+
+        .drawer-btn:hover {
+            background: var(--ink);
+            color: var(--paper);
+        }
+
+        .drawer-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .drawer-btn.primary {
+            background: var(--ink);
+            color: var(--paper);
+        }
+
+        .drawer-btn.primary:hover {
+            background: #333;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 70px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: var(--ink);
+            color: var(--paper);
+            font-size: var(--fs-xs);
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            padding: 10px 24px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s, transform 0.3s;
+            z-index: 1000;
+            white-space: nowrap;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .restart-banner {
+            display: none;
+            align-items: center;
+            gap: 12px;
+            font-size: var(--fs-xs);
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .restart-banner.show {
+            display: flex;
+        }
+
+        .spin {
+            width: 10px;
+            height: 10px;
+            border: 1px solid var(--muted);
+            border-top-color: var(--ink);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg)
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="finished-banner" id="finished-banner">All Training Rounds Complete — Server Finished</div>
+
+    <header class="chrome">
+        <div style="width:80px;"></div>
+        <div class="chrome-title">F R A C T A L</div>
+        <div class="chrome-right">
+            <div class="live-pill" id="live-pill">
+                <div class="live-dot"></div>
+                <span class="live-label" id="live-label">Connecting</span>
+            </div>
+            <button class="chrome-btn" id="btn-settings" onclick="openDrawer()">Configure</button>
+            <button class="chrome-btn" id="btn-restart" onclick="confirmRestart()">Restart</button>
+        </div>
+    </header>
+
+    <div class="drawer-overlay" id="overlay" onclick="closeDrawer()"></div>
+    <div class="drawer" id="drawer">
+        <div class="drawer-head">
+            <div class="drawer-title">Configuration</div>
+            <button class="drawer-close" onclick="closeDrawer()">&#215;</button>
+        </div>
+        <div class="drawer-body">
+            <div class="drawer-section-label">Display</div>
+            <div class="scale-row">
+                <div class="scale-label-group">
+                    <div class="scale-label">Font Scale</div>
+                    <div class="scale-hint">--scale</div>
+                </div>
+                <div class="scale-right"><input class="scale-slider" type="range" id="scale-slider" min="0.7" max="2.2"
+                        step="0.05" value="1.6" oninput="applyScale(this.value)"><span class="scale-val"
+                        id="scale-val">1.60</span></div>
+            </div>
+            <div class="drawer-section-label">Fleet Control</div>
+            <div class="field">
+                <div class="field-left">
+                    <div class="field-label">Max Clients</div>
+                    <div class="field-hint">MAX_CLIENTS</div>
+                </div><input class="field-input" type="number" id="cfg-MAX_CLIENTS" min="1" max="500">
+            </div>
+            <div class="field">
+                <div class="field-left">
+                    <div class="field-label">Max Rounds</div>
+                    <div class="field-hint">MAX_ROUNDS</div>
+                </div><input class="field-input" type="number" id="cfg-MAX_ROUNDS" min="1" max="9999">
+            </div>
+            <div class="toggle-row">
+                <div class="field-left">
+                    <div class="field-label">Repetitive Training</div>
+                    <div class="field-hint">REPETITIVE_TRAINING</div>
+                </div><label class="toggle-switch"><input type="checkbox" id="cfg-REPETITIVE_TRAINING">
+                    <div class="toggle-track"></div>
+                    <div class="toggle-thumb"></div>
+                </label>
+            </div>
+            <div class="drawer-section-label">Data <span
+                    style="font-size:var(--fs-xxs);color:#bbb;text-transform:none;margin-left:8px;">· requires
+                    restart</span></div>
+            <div class="field">
+                <div class="field-left">
+                    <div class="field-label">Bins</div>
+                    <div class="field-hint">N_BINS</div>
+                </div><input class="field-input" type="number" id="cfg-N_BINS" min="1" max="1000">
+            </div>
+            <div class="field">
+                <div class="field-left">
+                    <div class="field-label">Items / Bin</div>
+                    <div class="field-hint">ITEMS_PER_BIN</div>
+                </div><input class="field-input" type="number" id="cfg-ITEMS_PER_BIN" min="1" step="100">
+            </div>
+            <div class="drawer-section-label">Training Hyperparameters</div>
+            <div class="field">
+                <div class="field-left">
+                    <div class="field-label">Epochs</div>
+                    <div class="field-hint">NUM_EPOCHS</div>
+                </div><input class="field-input" type="number" id="cfg-NUM_EPOCHS" min="1" max="200">
+            </div>
+            <div class="field">
+                <div class="field-left">
+                    <div class="field-label">Batch Size</div>
+                    <div class="field-hint">BATCH_SIZE</div>
+                </div><input class="field-input" type="number" id="cfg-BATCH_SIZE" min="1" step="8">
+            </div>
+            <div class="field">
+                <div class="field-left">
+                    <div class="field-label">Classes</div>
+                    <div class="field-hint">NUM_CLASSES</div>
+                </div><input class="field-input" type="number" id="cfg-NUM_CLASSES" min="1" max="1000">
+            </div>
+            <div class="field">
+                <div class="field-left">
+                    <div class="field-label">Image Size</div>
+                    <div class="field-hint">IMG_SIZE (px)</div>
+                </div><input class="field-input" type="number" id="cfg-IMG_SIZE" min="1" max="512">
+            </div>
+            <div class="drawer-section-label">Model Identity</div>
+            <div class="field">
+                <div class="field-left">
+                    <div class="field-label">Model ID</div>
+                    <div class="field-hint">MODEL_ID</div>
+                </div><input class="field-input" type="text" id="cfg-MODEL_ID" maxlength="4" style="text-align:right;">
+            </div>
+            <div class="field">
+                <div class="field-left">
+                    <div class="field-label">Data ID</div>
+                    <div class="field-hint">DATA_ID</div>
+                </div><input class="field-input" type="text" id="cfg-DATA_ID" maxlength="4" style="text-align:right;">
+            </div>
+            <div class="field">
+                <div class="field-left">
+                    <div class="field-label">Dataset</div>
+                    <div class="field-hint">DATASET</div>
+                </div><input class="field-input" type="text" id="cfg-DATASET" style="width:140px;text-align:left;">
+            </div>
+            <div class="field">
+                <div class="field-left">
+                    <div class="field-label">Architecture</div>
+                    <div class="field-hint">ARCHITECTURE</div>
+                </div><input class="field-input" type="text" id="cfg-ARCHITECTURE" style="width:140px;text-align:left;">
+            </div>
+            <div class="drawer-note"><strong>Font Scale</strong> instant.<br><strong>Fleet &amp; Hyperparams</strong>
+                Apply Config Only.<br><strong>Bins / Items</strong> Apply &amp; Restart required.<br><strong>Model /
+                    Data ID</strong> Apply &amp; Restart required.</div>
+        </div>
+        <div class="drawer-foot">
+            <button class="drawer-btn primary" id="btn-apply-restart" onclick="applyAndRestart()">Apply &amp;
+                Restart</button>
+            <button class="drawer-btn" id="btn-apply-only" onclick="applyOnly()">Apply Config Only</button>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="page">
+        <div class="hero">
+            <div class="hero-round">
+                <div class="hero-num" id="h-round">01</div>
+                <div class="hero-sub">
+                    <div class="hero-sub-label">Current Round</div>
+                    <div class="hero-sub-val" id="h-status">Connecting to server —</div>
+                    <div class="restart-banner" id="restart-banner">
+                        <div class="spin"></div><span>Restarting</span>
+                    </div>
+                </div>
+            </div>
+            <div class="hero-right">
+                <div class="hero-agg" id="h-agg">Awaiting Aggregation</div>
+                <div class="rounds-badge" id="rounds-badge">Rounds — / —</div>
+                <div class="fleet-badge" id="fleet-badge">Fleet: —</div>
+            </div>
+        </div>
+
+        <div class="cols">
+            <div class="col">
+                <div class="col-head">System Metrics</div>
+                <div class="metric"><span class="metric-k">Model ID</span><span class="metric-v tag"
+                        id="m-modelid">—</span></div>
+                <div class="metric"><span class="metric-k">Data ID</span><span class="metric-v tag"
+                        id="m-dataid">—</span></div>
+                <div class="metric"><span class="metric-k">Architecture</span><span class="metric-v tag"
+                        id="m-arch">—</span></div>
+                <div class="metric"><span class="metric-k">Dataset</span><span class="metric-v" id="m-dataset">—</span>
+                </div>
+                <div class="metric"><span class="metric-k">Max Clients</span><span class="metric-v"
+                        id="m-maxclients">—</span></div>
+                <div class="metric"><span class="metric-k">Max Rounds</span><span class="metric-v"
+                        id="m-maxrounds">—</span></div>
+                <div class="metric"><span class="metric-k">Bins</span><span class="metric-v" id="m-bins">—</span></div>
+                <div class="metric"><span class="metric-k">Items / Bin</span><span class="metric-v" id="m-ipb">—</span>
+                </div>
+                <div class="metric"><span class="metric-k">Epochs</span><span class="metric-v" id="m-epochs">—</span>
+                </div>
+                <div class="metric"><span class="metric-k">Batch</span><span class="metric-v" id="m-batch">—</span>
+                </div>
+                <div class="metric"><span class="metric-k">Classes</span><span class="metric-v" id="m-classes">—</span>
+                </div>
+                <div class="metric"><span class="metric-k">TFLite</span><span class="metric-v" id="m-tflite">—</span>
+                </div>
+                <div class="metric"><span class="metric-k">Global Ckpt</span><span class="metric-v" id="m-ckpt">—</span>
+                </div>
+                <div class="metric"><span class="metric-k">Repeat Train</span><span class="metric-v"
+                        id="m-repeat">—</span></div>
+            </div>
+            <div class="col">
+                <div class="col-head">Round Progress</div>
+                <div class="bars">
+                    <div>
+                        <div class="bar-head"><span>Data Dispatch</span><span id="bv-dispatch">0 / 0</span></div>
+                        <div class="bar-track">
+                            <div class="bar-fill" id="bf-dispatch" style="width:0%"></div>
+                            <div class="bar-knob" id="bk-dispatch" style="left:0%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="bar-head"><span>Upload Collection</span><span id="bv-upload">0 / 0</span></div>
+                        <div class="bar-track">
+                            <div class="bar-fill" id="bf-upload" style="width:0%"></div>
+                            <div class="bar-knob" id="bk-upload" style="left:0%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="bar-head"><span>Round Completion</span><span id="bv-round">0%</span></div>
+                        <div class="bar-track">
+                            <div class="bar-fill" id="bf-round" style="width:0%"></div>
+                            <div class="bar-knob" id="bk-round" style="left:0%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="bar-head"><span>Devices Assigned</span><span id="bv-devices">0</span></div>
+                        <div class="bar-track">
+                            <div class="bar-fill" id="bf-devices" style="width:0%"></div>
+                            <div class="bar-knob" id="bk-devices" style="left:0%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="bar-head"><span>Overall Rounds</span><span id="bv-rounds-overall">0 / 0</span></div>
+                        <div class="bar-track">
+                            <div class="bar-fill" id="bf-rounds-overall" style="width:0%"></div>
+                            <div class="bar-knob" id="bk-rounds-overall" style="left:0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="col-head">Pipeline</div>
+                <div class="tree">
+                    <div class="tree-phase" id="t-phase">—</div>
+                    <div class="tree-body">
+                        <div class="tree-spine" id="t-spine"></div>
+                        <div class="tree-arms" id="t-arms"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="col-head">Device Roster</div>
+                <div id="device-count-badge" class="device-count-badge">0 devices assigned</div>
+                <div class="device-list" id="device-list">
+                    <div class="device-empty">No devices yet —</div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="col-head">Round History</div>
+                <div class="history-list" id="history-list">
+                    <div class="history-empty">No rounds complete —</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="log-section">
+            <div class="log-bar">
+                <span class="log-bar-title">Server Log</span>
+                <div class="log-bar-right"><button class="log-clear-btn" onclick="clearLog()">Clear</button><span
+                        class="log-bar-count" id="log-count">0 events</span></div>
+            </div>
+            <div class="log-body" id="log-body">
+                <div class="log-empty">Waiting for server events —</div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="footer-chips">
+            <div class="f-chip">Port <strong>5000</strong></div>
+            <div class="f-chip">Model <strong id="fc-model">—</strong></div>
+            <div class="f-chip">Bins <strong id="fc-bins">—</strong></div>
+            <div class="f-chip">Items/Bin <strong id="fc-ipb">—</strong></div>
+            <div class="f-chip">Classes <strong id="fc-cls">—</strong></div>
+            <div class="f-chip">Image <strong id="fc-img">—</strong></div>
+            <div class="f-chip">Epochs <strong id="fc-epochs">—</strong></div>
+            <div class="f-chip">Batch <strong id="fc-batch">—</strong></div>
+            <div class="f-chip">Rounds <strong id="fc-rounds">—</strong></div>
+        </div>
+        <div class="footer-right">Federated Learning Server</div>
+    </footer>
+
+    <script>
+        const FLASK_URL = 'http://127.0.0.1:5000';
+        const $ = id => document.getElementById(id);
+        let lastLogLen = 0, prevAgg = false, prevRestart = false, prevDevices = [], serverOnline = null, liveConfig = {}, roundHistory = [], _logCleared = false;
+
+        function applyScale(val) { const v = parseFloat(val).toFixed(2); document.documentElement.style.setProperty('--scale', v); $('scale-val').textContent = v; $('scale-slider').value = v; try { localStorage.setItem('fractal-scale', v); } catch (e) { } }
+        (function () { try { const s = localStorage.getItem('fractal-scale'); if (s) applyScale(s); } catch (e) { } })();
+
+        function setOnline() { if (serverOnline === true) return; serverOnline = true; $('live-pill').className = 'live-pill online'; $('live-label').textContent = 'Online'; }
+        function setOffline() { if (serverOnline === false) return; serverOnline = false; $('live-pill').className = 'live-pill offline'; $('live-label').textContent = 'Offline'; $('h-status').textContent = 'Server unreachable —'; }
+
+        const STEPS = [{ label: 'Initialisation', desc: 'Model build · Data prep' }, { label: 'Data Dispatch', desc: 'Segments sent to clients' }, { label: 'On-Device Training', desc: 'Local gradient computation' }, { label: 'Fed. Averaging', desc: 'Weight aggregation' }, { label: 'Round Complete', desc: 'Global model updated' }];
+        function buildTree(idx) {
+            const spine = $('t-spine'), arms = $('t-arms'); spine.innerHTML = arms.innerHTML = '';
+            STEPS.forEach((step, i) => {
+                const done = i < idx, active = i === idx, on = done || active;
+                spine.append(Object.assign(document.createElement('div'), { className: 'spine-line' + (i === 0 ? ' ghost' : '') }), Object.assign(document.createElement('div'), { className: 'spine-node' + (on ? ' on' : '') }), Object.assign(document.createElement('div'), { className: 'spine-line' + (i === STEPS.length - 1 ? ' ghost' : '') }));
+                const arm = document.createElement('div'); arm.className = 'tree-arm';
+                const h = Object.assign(document.createElement('div'), { className: 'arm-h' + (on ? '' : ' ghost') });
+                const lbl = document.createElement('div'); lbl.className = 'arm-label';
+                lbl.append(Object.assign(document.createElement('div'), { className: 'arm-name' + (active ? ' on' : done ? ' done' : ''), textContent: step.label }), Object.assign(document.createElement('div'), { className: 'arm-desc' + (on ? ' on' : ''), textContent: step.desc }));
+                arm.append(h, lbl); arms.appendChild(arm);
+            });
+            $('t-phase').textContent = STEPS[Math.min(idx, STEPS.length - 1)].label;
+        }
+        function getStep(d) { if (d.aggregation_done) return 4; if (d.clients_uploaded >= d.num_clients && d.num_clients > 0) return 3; if (d.clients_uploaded > 0) return 2; if (d.segments_dispatched > 0) return 1; return 0; }
+
+        function setBar(fId, kId, vId, val, total) { const p = total > 0 ? Math.min(100, Math.round(val / total * 100)) : 0; $(fId).style.width = p + '%'; $(kId).style.left = p + '%'; $(vId).textContent = val + ' / ' + total; return p; }
+
+        function updateHistory(curR, aggDone) {
+            const last = roundHistory.length ? roundHistory[roundHistory.length - 1].round : 0;
+            if (aggDone && curR - 1 > last) roundHistory.push({ round: curR - 1, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), clients: liveConfig.MAX_CLIENTS || '?' });
+            const list = $('history-list');
+            if (!roundHistory.length) { list.innerHTML = '<div class="history-empty">No rounds complete —</div>'; return; }
+            list.innerHTML = [...roundHistory].reverse().slice(0, 12).map(r => '<div class="history-row"><span class="history-round">Round ' + String(r.round).padStart(2, '0') + '</span><span class="history-clients">' + r.clients + ' clients</span><span class="history-time">' + r.time + '</span></div>').join('');
+        }
+
+        function renderDevices(devices) {
+            $('device-count-badge').textContent = devices.length + ' device' + (devices.length === 1 ? '' : 's') + ' assigned';
+            const key = devices.join('|'); if (key === prevDevices.join('|')) return; prevDevices = [...devices];
+            const list = $('device-list');
+            if (!devices.length) { list.innerHTML = '<div class="device-empty">No devices yet —</div>'; return; }
+            list.innerHTML = devices.map(id => '<div class="device-row"><span class="device-id">' + esc(id) + '</span><div class="device-dot"></div></div>').join('');
+        }
+
+        function clearLog() { _logCleared = true; lastLogLen = 0; $('log-body').innerHTML = '<div class="log-empty">Log cleared —</div>'; $('log-count').textContent = '0 events'; }
+        function renderLog(log) {
+            if (_logCleared) { _logCleared = false; lastLogLen = log.length; return; }
+            if (log.length === lastLogLen) return; lastLogLen = log.length;
+            const body = $('log-body'), lmap = { info: 'INF', success: 'OK', warn: 'WRN', error: 'ERR' };
+            if (!log.length) { body.innerHTML = '<div class="log-empty">Waiting —</div>'; $('log-count').textContent = '0 events'; return; }
+            body.innerHTML = log.map(e => '<div class="log-row"><span class="log-time">' + e.time + '</span><span class="log-level ' + e.level + '">' + (lmap[e.level] || 'INF') + '</span><span class="log-text">' + esc(e.msg) + '</span></div>').join('');
+            $('log-count').textContent = log.length + ' events'; body.scrollTop = body.scrollHeight;
+        }
+        function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+        async function poll() {
+            try {
+                const r = await fetch(FLASK_URL + '/api/status', { signal: AbortSignal.timeout(4000) });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const d = await r.json(); setOnline();
+                const cfg = d.config || {}, restarting = !!d.restarting, finished = !!d.finished, curR = d.round || 1, maxR = d.max_rounds || cfg.MAX_ROUNDS || '?';
+                $('finished-banner').classList.toggle('show', finished);
+                if (restarting) { $('restart-banner').classList.add('show'); $('h-round').classList.add('restarting');['btn-restart', 'btn-apply-restart', 'btn-apply-only'].forEach(id => $(id).disabled = true); }
+                else { $('restart-banner').classList.remove('show'); $('h-round').classList.remove('restarting');['btn-restart', 'btn-apply-restart', 'btn-apply-only'].forEach(id => $(id).disabled = false); }
+                if (prevRestart && !restarting) { populateDrawer(cfg); showToast('Restart Complete'); roundHistory = []; }
+                prevRestart = restarting;
+                $('h-round').textContent = String(curR).padStart(2, '0');
+                $('h-status').textContent = finished ? 'All rounds complete' : restarting ? 'Re-initialising...' : d.aggregation_done ? 'Round ' + (curR - 1) + ' complete — ready' : (d.clients_uploaded + ' of ' + d.num_clients + ' clients reported');
+                const aggEl = $('h-agg');
+                if (finished) { aggEl.textContent = 'Training Finished'; aggEl.className = 'hero-agg finished'; }
+                else if (d.aggregation_done) { aggEl.textContent = 'Aggregation Complete'; aggEl.className = 'hero-agg complete'; }
+                else if (d.clients_uploaded >= d.num_clients && d.num_clients > 0) { aggEl.textContent = 'Aggregating…'; aggEl.className = 'hero-agg'; }
+                else { aggEl.textContent = 'Awaiting Aggregation'; aggEl.className = 'hero-agg'; }
+                if (d.aggregation_done && !prevAgg && !finished) { aggEl.style.transition = 'all 0s'; aggEl.style.outline = '2px solid #0a0a0a'; aggEl.style.outlineOffset = '4px'; setTimeout(() => { aggEl.style.transition = 'all 0.8s'; aggEl.style.outline = '2px solid transparent'; aggEl.style.outlineOffset = '12px'; }, 50); }
+                prevAgg = d.aggregation_done;
+                const remR = typeof maxR === 'number' ? Math.max(0, maxR - curR + 1) : '?';
+                $('rounds-badge').textContent = 'Round ' + curR + ' / ' + maxR;
+                $('rounds-badge').classList.toggle('urgent', typeof remR === 'number' && remR <= 2 && !finished);
+                const repeating = !!cfg.REPETITIVE_TRAINING;
+                $('fleet-badge').textContent = 'Fleet: ' + (repeating ? 'Repeating' : 'One-Shot');
+                $('fleet-badge').classList.toggle('repeating', repeating);
+                $('m-modelid').textContent = cfg.MODEL_ID || '—'; $('m-dataid').textContent = cfg.DATA_ID || '—'; $('m-arch').textContent = cfg.ARCHITECTURE || '—'; $('m-dataset').textContent = cfg.DATASET || '—';
+                $('m-maxclients').textContent = cfg.MAX_CLIENTS !== undefined ? cfg.MAX_CLIENTS : '—';
+                $('m-maxrounds').textContent = typeof maxR === 'number' ? curR + ' / ' + maxR : '—';
+                $('m-bins').textContent = cfg.N_BINS !== undefined ? cfg.N_BINS : '—';
+                $('m-ipb').textContent = cfg.ITEMS_PER_BIN !== undefined ? cfg.ITEMS_PER_BIN.toLocaleString() : '—';
+                $('m-epochs').textContent = cfg.NUM_EPOCHS !== undefined ? cfg.NUM_EPOCHS : '—';
+                $('m-batch').textContent = cfg.BATCH_SIZE !== undefined ? cfg.BATCH_SIZE : '—';
+                $('m-classes').textContent = cfg.NUM_CLASSES !== undefined ? cfg.NUM_CLASSES : '—';
+                $('m-tflite').textContent = d.tflite_model_size_kb ? d.tflite_model_size_kb + ' KB' : '—';
+                $('m-ckpt').textContent = d.global_model_exists ? 'Saved' : 'Pending';
+                const rep = $('m-repeat'); rep.textContent = repeating ? 'On' : 'Off'; rep.className = 'metric-v ' + (repeating ? 'bool-on' : 'bool-off');
+                const dp = setBar('bf-dispatch', 'bk-dispatch', 'bv-dispatch', d.segments_dispatched || 0, d.segments_total || 1);
+                const up = setBar('bf-upload', 'bk-upload', 'bv-upload', d.clients_uploaded || 0, d.num_clients || 1);
+                const rp = d.aggregation_done ? 100 : Math.round((dp + up) / 2);
+                $('bf-round').style.width = rp + '%'; $('bk-round').style.left = rp + '%'; $('bv-round').textContent = rp + '%';
+                const devs = Array.isArray(d.assigned_devices) ? d.assigned_devices : [];
+                const devPct = Math.min(100, d.num_clients > 0 ? Math.round(devs.length / d.num_clients * 100) : 0);
+                $('bf-devices').style.width = devPct + '%'; $('bk-devices').style.left = devPct + '%'; $('bv-devices').textContent = devs.length;
+                const roundsPct = typeof maxR === 'number' && maxR > 0 ? Math.min(100, Math.round((curR - 1) / maxR * 100)) : 0;
+                $('bf-rounds-overall').style.width = roundsPct + '%'; $('bk-rounds-overall').style.left = roundsPct + '%'; $('bv-rounds-overall').textContent = (curR - 1) + ' / ' + maxR;
+                const imgSz = cfg.INPUT_SHAPE ? cfg.INPUT_SHAPE[0] : (cfg.IMG_SIZE || '—');
+                $('fc-model').textContent = cfg.MODEL_ID || '—'; $('fc-bins').textContent = cfg.N_BINS !== undefined ? cfg.N_BINS : '—';
+                $('fc-ipb').textContent = cfg.ITEMS_PER_BIN !== undefined ? cfg.ITEMS_PER_BIN.toLocaleString() : '—';
+                $('fc-cls').textContent = cfg.NUM_CLASSES || '—'; $('fc-img').textContent = imgSz ? imgSz + 'x' + imgSz : '—';
+                $('fc-epochs').textContent = cfg.NUM_EPOCHS || '—'; $('fc-batch').textContent = cfg.BATCH_SIZE || '—';
+                $('fc-rounds').textContent = typeof maxR === 'number' ? curR + '/' + maxR : '—';
+                buildTree(getStep(d)); renderDevices(devs); updateHistory(curR, d.aggregation_done); renderLog(d.log || []); liveConfig = cfg;
+            } catch (e) { setOffline(); }
+        }
+
+        const INT_FIELDS = ['MAX_CLIENTS', 'MAX_ROUNDS', 'N_BINS', 'ITEMS_PER_BIN', 'NUM_EPOCHS', 'BATCH_SIZE', 'NUM_CLASSES', 'IMG_SIZE'];
+        const STR_FIELDS = ['MODEL_ID', 'DATA_ID', 'DATASET', 'ARCHITECTURE'];
+        const BOOL_FIELDS = ['REPETITIVE_TRAINING'];
+        function populateDrawer(cfg) {
+            INT_FIELDS.forEach(k => { const el = $('cfg-' + k); if (!el) return; const val = k === 'IMG_SIZE' ? (cfg.INPUT_SHAPE ? cfg.INPUT_SHAPE[0] : cfg.IMG_SIZE) : cfg[k]; if (val !== undefined) { el.value = val; el.classList.remove('changed'); } });
+            STR_FIELDS.forEach(k => { const el = $('cfg-' + k); if (el && cfg[k] !== undefined) { el.value = cfg[k]; el.classList.remove('changed'); } });
+            BOOL_FIELDS.forEach(k => { const el = $('cfg-' + k); if (el && cfg[k] !== undefined) el.checked = !!cfg[k]; });
+        }
+        function getDrawerValues() {
+            const out = {};
+            INT_FIELDS.forEach(k => { const el = $('cfg-' + k); if (el && el.value !== '') out[k] = parseInt(el.value, 10); });
+            STR_FIELDS.forEach(k => { const el = $('cfg-' + k); if (el && el.value.trim()) out[k] = el.value.trim(); });
+            BOOL_FIELDS.forEach(k => { const el = $('cfg-' + k); if (el) out[k] = el.checked; });
+            return out;
+        }
+        function openDrawer() { populateDrawer(liveConfig);[...INT_FIELDS, ...STR_FIELDS].forEach(k => { const el = $('cfg-' + k); if (el) el.oninput = () => el.classList.add('changed'); }); $('drawer').classList.add('open'); $('overlay').classList.add('open'); }
+        function closeDrawer() { $('drawer').classList.remove('open'); $('overlay').classList.remove('open'); }
+
+        async function applyOnly() {
+            try { const r = await fetch(FLASK_URL + '/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(getDrawerValues()) }); const data = await r.json(); if (data.errors && data.errors.length) { showToast('Error: ' + data.errors[0]); return; } liveConfig = data.config || liveConfig; populateDrawer(liveConfig); closeDrawer(); showToast('Config Applied'); }
+            catch (e) { showToast('Request Failed'); }
+        }
+        async function applyAndRestart() { const vals = getDrawerValues(); closeDrawer(); await doRestart(vals); }
+        async function confirmRestart() {
+            const btn = $('btn-restart');
+            if (btn.dataset.confirm !== 'yes') { btn.textContent = 'Confirm?'; btn.dataset.confirm = 'yes'; setTimeout(() => { btn.textContent = 'Restart'; btn.dataset.confirm = ''; }, 3000); return; }
+            btn.textContent = 'Restart'; btn.dataset.confirm = ''; await doRestart(null);
+        }
+        async function doRestart(cfg) {
+            try { await fetch(FLASK_URL + '/api/restart', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg ? { config: cfg } : {}) }); showToast('Restarting…'); lastLogLen = 0; prevDevices = []; }
+            catch (e) { showToast('Restart Failed'); }
+        }
+        let _tt; function showToast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(_tt); _tt = setTimeout(() => t.classList.remove('show'), 2800); }
+
+        buildTree(0); poll(); setInterval(poll, 2000);
+    </script>
+</body>
+
+</html>
