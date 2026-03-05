@@ -11,9 +11,12 @@ from datetime import datetime, timedelta
 from tensorflow.keras.datasets import fashion_mnist
 from tensorflow.keras.utils import to_categorical
 
+# from flask_cors import CORS  # 1. Add this import
+
+import os
 
 app = Flask(__name__)
-
+# CORS(app)
 
 # =============================================================
 # CONFIGURATION  — every tunable value lives here.
@@ -618,7 +621,7 @@ if __name__ == "__main__":
 
     print("===================================================")
     print(" FRACTAL FEDERATED LEARNING SERVER")
-    print(f" Dashboard  →  http://0.0.0.0:5000/")
+    print(f" Dashboard  →  http://127.0.0.1:5001/")
     print(f" MODEL_ID:                   {CONFIG['MODEL_ID']}")
     print(f" DATA_ID:                    {CONFIG['DATA_ID']}")
     print(f" MAX CLIENTS PER ROUND:      {CONFIG['MAX_CLIENTS']}")
@@ -630,4 +633,4 @@ if __name__ == "__main__":
     print(f" TASKS IN QUEUE:             {len(task_queue)}")
     print("===================================================")
 
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5001, debug=True)

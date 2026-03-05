@@ -1401,7 +1401,9 @@
     </footer>
 
     <script>
-        const FLASK_URL = 'http://127.0.0.1:5000';
+
+        const FLASK_URL = 'http://127.0.0.1:5001';
+        // const FLASK_URL = window.location.origin;
         const $ = id => document.getElementById(id);
         let lastLogLen = 0, prevAgg = false, prevRestart = false, prevDevices = [], serverOnline = null, liveConfig = {}, roundHistory = [], _logCleared = false;
 
@@ -1458,7 +1460,18 @@
 
         async function poll() {
             try {
+
                 const r = await fetch(FLASK_URL + '/api/status', { signal: AbortSignal.timeout(4000) });
+
+                // const r = await fetch(FLASK_URL + '/api/status', {
+                //     signal: AbortSignal.timeout(4000),
+                //     headers: {
+                //         'Bypass-Tunnel-Reminder': 'true' // This stops the "Friendly Reminder" page from breaking your API
+                //     }
+                // });
+
+
+
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 const d = await r.json(); setOnline();
                 const cfg = d.config || {}, restarting = !!d.restarting, finished = !!d.finished, curR = d.round || 1, maxR = d.max_rounds || cfg.MAX_ROUNDS || '?';
