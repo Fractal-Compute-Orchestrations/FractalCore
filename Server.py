@@ -11,12 +11,16 @@ from datetime import datetime, timedelta
 from tensorflow.keras.datasets import fashion_mnist
 from tensorflow.keras.utils import to_categorical
 
-# from flask_cors import CORS  # 1. Add this import
-
-import os
 
 app = Flask(__name__)
-# CORS(app)
+
+@app.after_request
+def add_cors(response):
+    response.headers["Access-Control-Allow-Origin"]  = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
+
 
 # =============================================================
 # CONFIGURATION  — every tunable value lives here.
@@ -86,12 +90,12 @@ class IDRegistry:
     def __init__(self):
         self._lock             = threading.Lock()
         self._segment_counters = {}
-        self._task_counters    = {}
+        self._task_counter     = 0
 
     def reset(self):
         with self._lock:
             self._segment_counters.clear()
-            self._task_counters.clear()
+            self._task_counter = 0
 
     def generateDataSegmentId(self, data_id: str) -> tuple:
         with self._lock:
@@ -102,10 +106,8 @@ class IDRegistry:
 
     def generateTaskId(self, model_id: str, data_id: str, segment_sequence: str) -> tuple:
         with self._lock:
-            key      = (model_id, data_id, segment_sequence)
-            seq      = self._task_counters.get(key, 0) + 1
-            self._task_counters[key] = seq
-            task_seq = f"{seq:07d}"
+            self._task_counter += 1
+            task_seq = f"{self._task_counter:07d}"
             return f"{model_id}{data_id}{segment_sequence}{task_seq}", task_seq
 
     def readable(self, task_Id: str) -> str:
@@ -121,6 +123,12 @@ id_registry = IDRegistry()
 
 task_queue       = deque()
 task_queue_lock  = threading.Lock()
+
+# Segment map — built ONCE at startup / full restart.
+# Each entry: (img_name, lbl_name, data_segment_id, seg_seq)
+# On circular refill the data bins cycle but segment IDs stay fixed;
+# only task IDs keep incrementing so every task dispatch is globally unique.
+_bin_segment_cache = []
 
 assigned_devices = set()   # device_ids that received a task this round
 
@@ -268,19 +276,40 @@ def create_android_ready_bins(n_bins, output_dir, items_per_bin, shuffle=True):
     return bin_files
 
 
-def build_task_queue(bin_files: list):
+def init_bin_segment_map(bin_files: list):
+    """
+    Called ONCE at startup or full restart.
+    Generates a stable segment ID for every data bin and caches the mapping.
+    Segment IDs are tied to data, so they stay the same when bins cycle.
+    """
+    global _bin_segment_cache
+    _bin_segment_cache = []
+    data_id = CONFIG["DATA_ID"]
+    for img_name, lbl_name in bin_files:
+        data_segment_id, seg_seq = id_registry.generateDataSegmentId(data_id)
+        _bin_segment_cache.append((img_name, lbl_name, data_segment_id, seg_seq))
+    add_log(f"Segment map initialised: {len(_bin_segment_cache)} bin(s).", "info")
+
+
+def build_task_queue():
+    """
+    (Re)fills the task queue from the cached segment map.
+    Generates a FRESH, globally-unique task_Id for every slot — task IDs
+    never repeat even when the data bins wrap around circularly.
+    """
     task_queue.clear()
     model_id = CONFIG["MODEL_ID"]
     data_id  = CONFIG["DATA_ID"]
 
     add_log(f"Building task queue — MODEL_ID={model_id}  DATA_ID={data_id}", "info")
 
-    for img_name, lbl_name in bin_files:
-        data_segment_id, seg_seq = id_registry.generateDataSegmentId(data_id)
-        task_Id, task_seq        = id_registry.generateTaskId(model_id, data_id, seg_seq)
+    for img_name, lbl_name, data_segment_id, seg_seq in _bin_segment_cache:
+        # task counters key on (model_id, data_id, seg_seq) and keep incrementing
+        # across calls, so task_Id is globally unique even if seg_seq repeats.
+        task_Id, task_seq = id_registry.generateTaskId(model_id, data_id, seg_seq)
 
         task_queue.append({
-            # IDs
+            # IDs — lowercase keys to match Android optString("task_Id")
             "task_Id":          task_Id,
             "task_Id_readable": id_registry.readable(task_Id),
             "model_id":         model_id,
@@ -296,7 +325,7 @@ def build_task_queue(bin_files: list):
                 "Image_Task", "Image_DataInitializer",
                 "Image_Trainer", "Image_InferenceValidator",
             ],
-            # Hyperparameters — pulled from live CONFIG at queue build time
+            # Hyperparameters
             "CKPT_FILENAME":       "checkpoint.ckpt",
             "NUM_EPOCHS":          CONFIG["NUM_EPOCHS"],
             "BATCH_SIZE":          CONFIG["BATCH_SIZE"],
@@ -349,7 +378,8 @@ def _do_restart(new_config=None):
             output_dir=DOWNLOAD_DIR,
             items_per_bin=CONFIG["ITEMS_PER_BIN"],
         )
-        build_task_queue(bin_files)
+        init_bin_segment_map(bin_files)   # stable segment IDs for this run
+        build_task_queue()                # fresh task IDs, starts from 1 after reset
     except Exception as e:
         add_log(f"Restart failed during data build: {e}", "error")
 
@@ -388,8 +418,16 @@ def get_current_task():
 
     with task_queue_lock:
         if not task_queue:
-            add_log(f"Device {device_id} requested a task — queue empty.", "warn")
-            return jsonify({"error": "No tasks available."}), 404
+            if _bin_segment_cache:
+                # Queue exhausted — refill circularly.
+                # Segment IDs stay the same (same data bins).
+                # build_task_queue() generates NEW task IDs via id_registry,
+                # so every dispatched task has a globally unique task_Id.
+                add_log("All bins dispatched — refilling queue circularly.", "info")
+                build_task_queue()
+            else:
+                add_log(f"Device {device_id} requested a task — queue empty, no bin cache.", "warn")
+                return jsonify({"error": "No tasks available."}), 404
         task = task_queue.popleft()
 
     assigned_devices.add(device_id)
@@ -436,8 +474,11 @@ def download_model():
 
 @app.route("/api/model/upload", methods=["POST"])
 def upload_checkpoint():
-    task_Id       = request.form.get("task_Id", "unknown_task")
-    device_id     = request.form.get("device_id", "unknown_device")
+    # Accept task_Id in any capitalisation Android may send
+    task_Id   = (request.form.get("task_Id")
+                 or request.form.get("task_Id")
+                 or "unknown_task")
+    device_id = request.form.get("device_id", "unknown_device")
     task_json_str = request.form.get("task_json", "{}")
 
     if "model_file" not in request.files:
@@ -446,7 +487,8 @@ def upload_checkpoint():
     if file.filename == "":
         return "No selected file", 400
 
-    save_filename = f"{task_Id}_dev_{device_id}.ckpt"
+    ts = int(datetime.now().timestamp() * 1000)
+    save_filename = f"{task_Id}_dev_{device_id}_{ts}.ckpt"
     file.save(os.path.join(UPLOAD_DIR, save_filename))
 
     with open(os.path.join(UPLOAD_DIR, f"{task_Id}_metadata.json"), "w", encoding="utf-8") as f:
@@ -551,7 +593,7 @@ ALLOWED_HOT_PATCH = {
     "DATASET", "ARCHITECTURE",
     # dashboard-compat aliases (mapped below)
     "NUM_CLIENTS", "IMAGES_PER_CLIENT", "TOTAL_IMAGES", "IMG_SIZE",
-    "task_Id",
+    "TASK_ID",
 }
 
 @app.route("/api/config", methods=["POST"])
@@ -617,11 +659,12 @@ if __name__ == "__main__":
         output_dir=DOWNLOAD_DIR,
         items_per_bin=CONFIG["ITEMS_PER_BIN"],
     )
-    build_task_queue(bin_files)
+    init_bin_segment_map(bin_files)   # stable segment IDs
+    build_task_queue()                # first batch of task IDs
 
     print("===================================================")
     print(" FRACTAL FEDERATED LEARNING SERVER")
-    print(f" Dashboard  →  http://127.0.0.1:5001/")
+    print(f" Dashboard  →  http://0.0.0.0:5001/")
     print(f" MODEL_ID:                   {CONFIG['MODEL_ID']}")
     print(f" DATA_ID:                    {CONFIG['DATA_ID']}")
     print(f" MAX CLIENTS PER ROUND:      {CONFIG['MAX_CLIENTS']}")
