@@ -4,12 +4,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FRACTAL — Federated Server</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Genos:ital,wght@0,100..900;1,100..900&display=swap"
-        rel="stylesheet">
+    <title>Fractal Grid</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    rel="stylesheet">
+
+
     <style>
+        @font-face {
+            font-family: 'Genos';
+            src: url("{{ url_for('static', filename='Genos-VariableFont_wght.ttf') }}") format('truetype-variations');
+            font-weight: 100 900;
+            font-style: normal;
+        }
+
+        @font-face {
+            font-family: 'Genos';
+            src: url("{{ url_for('static', filename='Genos-Italic-VariableFont_wght.ttf') }}") format('truetype-variations');
+            font-weight: 100 900;
+            font-style: italic;
+        }
+
         * {
             box-sizing: border-box;
             margin: 0;
@@ -17,7 +31,7 @@
         }
 
         :root {
-            --scale: 1.6;
+            --scale: 1.5;
             --ink: #0a0a0a;
             --paper: #ffffff;
             --muted: #888;
@@ -1122,6 +1136,26 @@
                 transform: rotate(360deg)
             }
         }
+
+        .chrome-logo-container {
+            width: 80px;
+            height: 85%;
+            /* Fills the height of the .chrome header */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chrome-logo {
+            width: 100%;
+            /* Exactly 80px */
+            height: auto;
+            max-height: 35px;
+            /* Prevents it from touching the top/bottom borders */
+            object-fit: contain;
+            filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.05));
+            /* Subtle depth */
+        }
     </style>
 </head>
 
@@ -1129,7 +1163,9 @@
     <div class="finished-banner" id="finished-banner">All Training Rounds Complete — Server Finished</div>
 
     <header class="chrome">
-        <div style="width:80px;"></div>
+        <div class="chrome-logo-container">
+            <img src="{{ url_for('static', filename='logo.svg') }}" class="chrome-logo" alt="Fractal">
+        </div>
         <div class="chrome-title">F R A C T A L</div>
         <div class="chrome-right">
             <div class="live-pill" id="live-pill">
@@ -1402,8 +1438,8 @@
 
     <script>
 
-        const FLASK_URL = 'http://127.0.0.1:5001';
-        // const FLASK_URL = window.location.origin;
+        // const FLASK_URL = 'http://127.0.0.1:5002';
+        const FLASK_URL = 'http://161.118.184.57:5000';
         const $ = id => document.getElementById(id);
         let lastLogLen = 0, prevAgg = false, prevRestart = false, prevDevices = [], serverOnline = null, liveConfig = {}, roundHistory = [], _logCleared = false;
 

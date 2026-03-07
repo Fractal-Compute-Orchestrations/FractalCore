@@ -1,1 +1,0 @@
-Invoke-RestMethod -Uri "https://www.duckdns.org/update?domains=fractal-app&token=ff32bb08-0e2a-47c9-8830-008c82a0acb5&ip="

@@ -1,1 +1,0 @@
-{"task_Id":"0009200900000040000004","taskType":"ActiveTask","training_type":["Image_Task","Image_DataInitializer","Image_Trainer","Image_InferenceValidator"],"CKPT_FILENAME":"checkpoint.ckpt","MODEL_FILENAME":"0009_model.tflite","NUM_EPOCHS":1,"BATCH_SIZE":100,"NUM_TRAININGS":6000,"NUM_CLASSES":10,"INPUT_SHAPE":[28,28]}

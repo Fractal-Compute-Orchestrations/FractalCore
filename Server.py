@@ -1,5 +1,4 @@
-from flask import Flask, jsonify, send_file, request, send_from_directory
-
+from flask import Flask, jsonify, send_file, request, render_template, redirect, url_for, session, send_from_directory
 import os
 import json
 import threading
@@ -11,8 +10,11 @@ from datetime import datetime, timedelta
 from tensorflow.keras.datasets import fashion_mnist
 from tensorflow.keras.utils import to_categorical
 
-
 app = Flask(__name__)
+
+# --- SECURITY CONFIG ---
+app.secret_key = 'fractal_system_secure_key_2026' 
+ADMIN_PASSWORD = "orchestrate"           
 
 @app.after_request
 def add_cors(response):
@@ -21,6 +23,14 @@ def add_cors(response):
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
 
+# --- LOGIN DECORATOR ---
+def login_required(f):
+    def wrapper(*args, **kwargs):
+        if not session.get('logged_in'):
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    wrapper.__name__ = f.__name__
+    return wrapper
 
 # =============================================================
 # CONFIGURATION  — every tunable value lives here.
@@ -62,11 +72,18 @@ CONFIG = {
 BASE_DIR         = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_DIR     = os.path.join(BASE_DIR, "android_training_bins")
 UPLOAD_DIR       = os.path.join(BASE_DIR, "uploads")
+MODEL_DIR        = os.path.join(BASE_DIR, "downloads") 
 GLOBAL_CKPT_PATH = os.path.join(BASE_DIR, "global_model", "global.ckpt")
+
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(os.path.dirname(GLOBAL_CKPT_PATH), exist_ok=True)
+os.makedirs(os.path.join(BASE_DIR, "downloads"), exist_ok=True)
+
+# Ensure all directories exist on the cloud server
+for path in [DOWNLOAD_DIR, UPLOAD_DIR, MODEL_DIR, os.path.dirname(GLOBAL_CKPT_PATH)]:
+    os.makedirs(path, exist_ok=True)
 
 # Purge stale checkpoints from a previous crashed round
 _stale = [f for f in os.listdir(UPLOAD_DIR) if f.endswith(".ckpt")]
@@ -74,6 +91,26 @@ for _f in _stale:
     os.remove(os.path.join(UPLOAD_DIR, _f))
 if _stale:
     print(f"[!] Purged {len(_stale)} stale checkpoint(s) from uploads/ on startup.")
+
+
+# =============================================================
+# AUTHENTICATION ROUTES
+# =============================================================
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        if request.form.get('password') == ADMIN_PASSWORD:
+            session['logged_in'] = True
+            return redirect(url_for('dashboard'))
+        return render_template('login.html', error="Invalid Authentication Key")
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
 
 
 # =============================================================
@@ -391,10 +428,10 @@ def _do_restart(new_config=None):
 # DASHBOARD — serve the HTML UI
 # =============================================================
 
-@app.route("/")
-def dashboard():
-    """Serve the dashboard HTML from the same directory as server.py."""
-    return send_from_directory(BASE_DIR, "dashboard.html")
+# @app.route("/")
+# def dashboard():
+#     """Serve the dashboard HTML from the same directory as server.py."""
+#     return send_from_directory(BASE_DIR, "dashboard.html")
 
 
 # =============================================================
@@ -596,7 +633,14 @@ ALLOWED_HOT_PATCH = {
     "TASK_ID",
 }
 
+@app.route("/")
+@login_required # <--- NOW PROTECTED
+def dashboard():
+    return render_template("dashboard.html")
+
+
 @app.route("/api/config", methods=["POST"])
+@login_required #
 def update_config():
     payload = request.get_json(force=True, silent=True) or {}
     errors  = []
@@ -638,6 +682,7 @@ def update_config():
 # =============================================================
 
 @app.route("/api/restart", methods=["POST"])
+@login_required
 def restart_server():
     if server_state["restarting"]:
         return jsonify({"error": "Already restarting."}), 409
@@ -664,7 +709,7 @@ if __name__ == "__main__":
 
     print("===================================================")
     print(" FRACTAL FEDERATED LEARNING SERVER")
-    print(f" Dashboard  →  http://0.0.0.0:5001/")
+    print(f" Dashboard  →  http://0.0.0.0:5000/")
     print(f" MODEL_ID:                   {CONFIG['MODEL_ID']}")
     print(f" DATA_ID:                    {CONFIG['DATA_ID']}")
     print(f" MAX CLIENTS PER ROUND:      {CONFIG['MAX_CLIENTS']}")
@@ -676,4 +721,4 @@ if __name__ == "__main__":
     print(f" TASKS IN QUEUE:             {len(task_queue)}")
     print("===================================================")
 
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False)
