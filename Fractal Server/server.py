@@ -48,6 +48,9 @@ CONFIG = {
     "MAX_ROUNDS":           5,      # server stops cleanly after this many rounds
     "REPETITIVE_TRAINING":  True,   # allow same device_id across rounds
 
+    # --- Reward / Economy ---                     # <--- ADD THIS SECTION
+    "CHECKPOINT_REWARD_RATE": 15.0,                # <--- Base MB reward per epoch
+
     # --- Data ---
     "N_BINS":        10,    # number of data segments / bins
     "ITEMS_PER_BIN": 6000,  # samples per bin
@@ -174,6 +177,7 @@ server_state = {
     "aggregation_done":    False,
     "finished":            False,
     "restarting":          False,
+    "paused":              False, 
     "segments_total":      0,
     "segments_dispatched": 0,
     "clients_uploaded":    0,
@@ -354,6 +358,12 @@ def build_task_queue():
             "data_segment_id":  data_segment_id,
             "segment_sequence": seg_seq,
             "task_sequence":    task_seq,
+
+            # --- NEW ADDITIONS ---
+            "architecture":     CONFIG["ARCHITECTURE"],          # Tells Android which model to load
+            "reward_rate":      CONFIG["CHECKPOINT_REWARD_RATE"], # Tells Android how much water to rise
+            # ---------------------
+            
             # Metadata
             "taskType":               "ActiveTask",
             "task_expire_date":       (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d"),
@@ -446,6 +456,8 @@ def get_current_task():
         return jsonify({"error": "All training rounds complete. Server is done."}), 410
     if server_state["restarting"]:
         return jsonify({"error": "Server is restarting. Try again shortly."}), 503
+    if server_state["paused"]:
+        return jsonify({"error": "Server is paused."}), 503
     if len(assigned_devices) >= CONFIG["MAX_CLIENTS"]:
         add_log(f"Device {device_id} rejected — cap of {CONFIG['MAX_CLIENTS']} reached.", "warn")
         return jsonify({"error": f"Max client limit ({CONFIG['MAX_CLIENTS']}) reached."}), 403
@@ -508,15 +520,15 @@ def download_model():
 # =============================================================
 # 3. CHECKPOINT UPLOAD
 # =============================================================
-
 @app.route("/api/model/upload", methods=["POST"])
 def upload_checkpoint():
     # Accept task_Id in any capitalisation Android may send
     task_Id   = (request.form.get("task_Id")
-                 or request.form.get("task_Id")
+                 or request.form.get("taskId")
                  or "unknown_task")
     device_id = request.form.get("device_id", "unknown_device")
-    task_json_str = request.form.get("task_json", "{}")
+
+    # --- JSON EXTRACTION COMPLETELY REMOVED ---
 
     if "model_file" not in request.files:
         return "No file uploaded", 400
@@ -528,8 +540,7 @@ def upload_checkpoint():
     save_filename = f"{task_Id}_dev_{device_id}_{ts}.ckpt"
     file.save(os.path.join(UPLOAD_DIR, save_filename))
 
-    with open(os.path.join(UPLOAD_DIR, f"{task_Id}_metadata.json"), "w", encoding="utf-8") as f:
-        f.write(task_json_str)
+    # --- JSON METADATA FILE WRITING COMPLETELY REMOVED ---
 
     add_log(f"Received checkpoint: {save_filename}", "success")
 
@@ -543,6 +554,9 @@ def upload_checkpoint():
 
         assigned_devices.clear()
         server_state["clients_uploaded"] = 0
+        server_state["segments_dispatched"] = 0  
+        server_state["aggregation_done"]    = False 
+        
         for fn in received_ckpts:
             os.remove(os.path.join(UPLOAD_DIR, fn))
 
@@ -550,7 +564,6 @@ def upload_checkpoint():
             add_log("Round reset. Ready for next round.", "info")
 
     return "Upload Successful", 200
-
 
 # =============================================================
 # 4. STATUS  (primary data source for the dashboard)
@@ -570,6 +583,7 @@ def get_status():
         "round":               server_state["round"],
         "max_rounds":          CONFIG["MAX_ROUNDS"],
         "aggregation_done":    server_state["aggregation_done"],
+        "paused":              server_state["paused"],
         "finished":            server_state["finished"],
         "restarting":          server_state["restarting"],
 
@@ -631,6 +645,7 @@ ALLOWED_HOT_PATCH = {
     # dashboard-compat aliases (mapped below)
     "NUM_CLIENTS", "IMAGES_PER_CLIENT", "TOTAL_IMAGES", "IMG_SIZE",
     "TASK_ID",
+    "CHECKPOINT_REWARD_RATE",
 }
 
 @app.route("/")
@@ -693,6 +708,13 @@ def restart_server():
     threading.Thread(target=_do_restart, args=(new_config,), daemon=True).start()
     return jsonify({"status": "Restart initiated."})
 
+@app.route("/api/pause", methods=["POST"])
+@login_required
+def toggle_pause():
+    server_state["paused"] = not server_state["paused"]
+    state = "paused" if server_state["paused"] else "resumed"
+    add_log(f"Server {state} by admin.", "warn")
+    return jsonify({"paused": server_state["paused"]})
 
 # =============================================================
 # STARTUP
@@ -709,7 +731,7 @@ if __name__ == "__main__":
 
     print("===================================================")
     print(" FRACTAL FEDERATED LEARNING SERVER")
-    print(f" Dashboard  →  http://0.0.0.0:5000/")
+    print(f" Dashboard  →  http://127.0.0.1:5000/")
     print(f" MODEL_ID:                   {CONFIG['MODEL_ID']}")
     print(f" DATA_ID:                    {CONFIG['DATA_ID']}")
     print(f" MAX CLIENTS PER ROUND:      {CONFIG['MAX_CLIENTS']}")

@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fractal Grid</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
-    rel="stylesheet">
 
 
     <style>
@@ -1174,6 +1173,7 @@
             </div>
             <button class="chrome-btn" id="btn-settings" onclick="openDrawer()">Configure</button>
             <button class="chrome-btn" id="btn-restart" onclick="confirmRestart()">Restart</button>
+            <button class="chrome-btn" id="btn-pause" onclick="togglePause()">Pause</button>
         </div>
     </header>
 
@@ -1256,6 +1256,13 @@
                     <div class="field-hint">IMG_SIZE (px)</div>
                 </div><input class="field-input" type="number" id="cfg-IMG_SIZE" min="1" max="512">
             </div>
+            <div class="drawer-section-label">Economy</div>
+            <div class="field">
+                <div class="field-left">
+                    <div class="field-label">Reward Rate</div>
+                    <div class="field-hint">MB / Epoch</div>
+                </div><input class="field-input" type="number" id="cfg-CHECKPOINT_REWARD_RATE" min="0" step="0.1">
+            </div>
             <div class="drawer-section-label">Model Identity</div>
             <div class="field">
                 <div class="field-left">
@@ -1337,6 +1344,8 @@
                 </div>
                 <div class="metric"><span class="metric-k">Classes</span><span class="metric-v" id="m-classes">—</span>
                 </div>
+                <div class="metric"><span class="metric-k">Reward/Epoch</span><span class="metric-v"
+                        id="m-reward">—</span></div>
                 <div class="metric"><span class="metric-k">TFLite</span><span class="metric-v" id="m-tflite">—</span>
                 </div>
                 <div class="metric"><span class="metric-k">Global Ckpt</span><span class="metric-v" id="m-ckpt">—</span>
@@ -1428,6 +1437,7 @@
             <div class="f-chip">Bins <strong id="fc-bins">—</strong></div>
             <div class="f-chip">Items/Bin <strong id="fc-ipb">—</strong></div>
             <div class="f-chip">Classes <strong id="fc-cls">—</strong></div>
+            <div class="f-chip">Reward <strong id="fc-reward">—</strong></div>
             <div class="f-chip">Image <strong id="fc-img">—</strong></div>
             <div class="f-chip">Epochs <strong id="fc-epochs">—</strong></div>
             <div class="f-chip">Batch <strong id="fc-batch">—</strong></div>
@@ -1438,66 +1448,194 @@
 
     <script>
 
-        // const FLASK_URL = 'http://127.0.0.1:5002';
-        const FLASK_URL = 'http://161.118.184.57:5000';
+        const FLASK_URL = 'http://127.0.0.1:5000';
+        // const FLASK_URL = 'https://161.118.184.57:5000';
+        //const $ = id => document.getElementById(id);
+
+        // const FLASK_URL = 'https://fractal-grid.duckdns.org';
         const $ = id => document.getElementById(id);
-        let lastLogLen = 0, prevAgg = false, prevRestart = false, prevDevices = [], serverOnline = null, liveConfig = {}, roundHistory = [], _logCleared = false;
 
-        function applyScale(val) { const v = parseFloat(val).toFixed(2); document.documentElement.style.setProperty('--scale', v); $('scale-val').textContent = v; $('scale-slider').value = v; try { localStorage.setItem('fractal-scale', v); } catch (e) { } }
-        (function () { try { const s = localStorage.getItem('fractal-scale'); if (s) applyScale(s); } catch (e) { } })();
+        let lastLogLen = 0,
+            prevAgg = false,
+            prevRestart = false,
+            prevDevices = [],
+            serverOnline = null,
+            liveConfig = {},
+            roundHistory = [],
+            _logCleared = false;
 
-        function setOnline() { if (serverOnline === true) return; serverOnline = true; $('live-pill').className = 'live-pill online'; $('live-label').textContent = 'Online'; }
-        function setOffline() { if (serverOnline === false) return; serverOnline = false; $('live-pill').className = 'live-pill offline'; $('live-label').textContent = 'Offline'; $('h-status').textContent = 'Server unreachable —'; }
+        function applyScale(val) {
+            const v = parseFloat(val).toFixed(2);
+            document.documentElement.style.setProperty('--scale', v);
+            $('scale-val').textContent = v;
+            $('scale-slider').value = v;
+            try {
+                localStorage.setItem('fractal-scale', v);
+            } catch (e) { }
+        }
+        (function () {
+            try {
+                const s = localStorage.getItem('fractal-scale');
+                if (s) applyScale(s);
+            } catch (e) { }
+        })();
 
-        const STEPS = [{ label: 'Initialisation', desc: 'Model build · Data prep' }, { label: 'Data Dispatch', desc: 'Segments sent to clients' }, { label: 'On-Device Training', desc: 'Local gradient computation' }, { label: 'Fed. Averaging', desc: 'Weight aggregation' }, { label: 'Round Complete', desc: 'Global model updated' }];
+        function setOnline() {
+            if (serverOnline === true) return;
+            serverOnline = true;
+            $('live-pill').className = 'live-pill online';
+            $('live-label').textContent = 'Online';
+        }
+
+        function setOffline() {
+            if (serverOnline === false) return;
+            serverOnline = false;
+            $('live-pill').className = 'live-pill offline';
+            $('live-label').textContent = 'Offline';
+            $('h-status').textContent = 'Server unreachable —';
+        }
+
+        const STEPS = [{
+            label: 'Initialisation',
+            desc: 'Model build · Data prep'
+        }, {
+            label: 'Data Dispatch',
+            desc: 'Segments sent to clients'
+        }, {
+            label: 'On-Device Training',
+            desc: 'Local gradient computation'
+        }, {
+            label: 'Fed. Averaging',
+            desc: 'Weight aggregation'
+        }, {
+            label: 'Round Complete',
+            desc: 'Global model updated'
+        }];
+
         function buildTree(idx) {
-            const spine = $('t-spine'), arms = $('t-arms'); spine.innerHTML = arms.innerHTML = '';
+            const spine = $('t-spine'),
+                arms = $('t-arms');
+            spine.innerHTML = arms.innerHTML = '';
             STEPS.forEach((step, i) => {
-                const done = i < idx, active = i === idx, on = done || active;
-                spine.append(Object.assign(document.createElement('div'), { className: 'spine-line' + (i === 0 ? ' ghost' : '') }), Object.assign(document.createElement('div'), { className: 'spine-node' + (on ? ' on' : '') }), Object.assign(document.createElement('div'), { className: 'spine-line' + (i === STEPS.length - 1 ? ' ghost' : '') }));
-                const arm = document.createElement('div'); arm.className = 'tree-arm';
-                const h = Object.assign(document.createElement('div'), { className: 'arm-h' + (on ? '' : ' ghost') });
-                const lbl = document.createElement('div'); lbl.className = 'arm-label';
-                lbl.append(Object.assign(document.createElement('div'), { className: 'arm-name' + (active ? ' on' : done ? ' done' : ''), textContent: step.label }), Object.assign(document.createElement('div'), { className: 'arm-desc' + (on ? ' on' : ''), textContent: step.desc }));
-                arm.append(h, lbl); arms.appendChild(arm);
+                const done = i < idx,
+                    active = i === idx,
+                    on = done || active;
+                spine.append(Object.assign(document.createElement('div'), {
+                    className: 'spine-line' + (i === 0 ? ' ghost' : '')
+                }), Object.assign(document.createElement('div'), {
+                    className: 'spine-node' + (on ? ' on' : '')
+                }), Object.assign(document.createElement('div'), {
+                    className: 'spine-line' + (i === STEPS.length - 1 ? ' ghost' : '')
+                }));
+                const arm = document.createElement('div');
+                arm.className = 'tree-arm';
+                const h = Object.assign(document.createElement('div'), {
+                    className: 'arm-h' + (on ? '' : ' ghost')
+                });
+                const lbl = document.createElement('div');
+                lbl.className = 'arm-label';
+                lbl.append(Object.assign(document.createElement('div'), {
+                    className: 'arm-name' + (active ? ' on' : done ? ' done' : ''),
+                    textContent: step.label
+                }), Object.assign(document.createElement('div'), {
+                    className: 'arm-desc' + (on ? ' on' : ''),
+                    textContent: step.desc
+                }));
+                arm.append(h, lbl);
+                arms.appendChild(arm);
             });
             $('t-phase').textContent = STEPS[Math.min(idx, STEPS.length - 1)].label;
         }
-        function getStep(d) { if (d.aggregation_done) return 4; if (d.clients_uploaded >= d.num_clients && d.num_clients > 0) return 3; if (d.clients_uploaded > 0) return 2; if (d.segments_dispatched > 0) return 1; return 0; }
 
-        function setBar(fId, kId, vId, val, total) { const p = total > 0 ? Math.min(100, Math.round(val / total * 100)) : 0; $(fId).style.width = p + '%'; $(kId).style.left = p + '%'; $(vId).textContent = val + ' / ' + total; return p; }
+        function getStep(d) {
+            if (d.aggregation_done) return 4;
+            if (d.clients_uploaded >= d.num_clients && d.num_clients > 0) return 3;
+            if (d.clients_uploaded > 0) return 2;
+            if (d.segments_dispatched > 0) return 1;
+            return 0;
+        }
+
+        function setBar(fId, kId, vId, val, total) {
+            const p = total > 0 ? Math.min(100, Math.round(val / total * 100)) : 0;
+            $(fId).style.width = p + '%';
+            $(kId).style.left = p + '%';
+            $(vId).textContent = val + ' / ' + total;
+            return p;
+        }
 
         function updateHistory(curR, aggDone) {
             const last = roundHistory.length ? roundHistory[roundHistory.length - 1].round : 0;
-            if (aggDone && curR - 1 > last) roundHistory.push({ round: curR - 1, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), clients: liveConfig.MAX_CLIENTS || '?' });
+            if (aggDone && curR - 1 > last) roundHistory.push({
+                round: curR - 1,
+                time: new Date().toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }),
+                clients: liveConfig.MAX_CLIENTS || '?'
+            });
             const list = $('history-list');
-            if (!roundHistory.length) { list.innerHTML = '<div class="history-empty">No rounds complete —</div>'; return; }
+            if (!roundHistory.length) {
+                list.innerHTML = '<div class="history-empty">No rounds complete —</div>';
+                return;
+            }
             list.innerHTML = [...roundHistory].reverse().slice(0, 12).map(r => '<div class="history-row"><span class="history-round">Round ' + String(r.round).padStart(2, '0') + '</span><span class="history-clients">' + r.clients + ' clients</span><span class="history-time">' + r.time + '</span></div>').join('');
         }
 
         function renderDevices(devices) {
             $('device-count-badge').textContent = devices.length + ' device' + (devices.length === 1 ? '' : 's') + ' assigned';
-            const key = devices.join('|'); if (key === prevDevices.join('|')) return; prevDevices = [...devices];
+            const key = devices.join('|');
+            if (key === prevDevices.join('|')) return;
+            prevDevices = [...devices];
             const list = $('device-list');
-            if (!devices.length) { list.innerHTML = '<div class="device-empty">No devices yet —</div>'; return; }
+            if (!devices.length) {
+                list.innerHTML = '<div class="device-empty">No devices yet —</div>';
+                return;
+            }
             list.innerHTML = devices.map(id => '<div class="device-row"><span class="device-id">' + esc(id) + '</span><div class="device-dot"></div></div>').join('');
         }
 
-        function clearLog() { _logCleared = true; lastLogLen = 0; $('log-body').innerHTML = '<div class="log-empty">Log cleared —</div>'; $('log-count').textContent = '0 events'; }
-        function renderLog(log) {
-            if (_logCleared) { _logCleared = false; lastLogLen = log.length; return; }
-            if (log.length === lastLogLen) return; lastLogLen = log.length;
-            const body = $('log-body'), lmap = { info: 'INF', success: 'OK', warn: 'WRN', error: 'ERR' };
-            if (!log.length) { body.innerHTML = '<div class="log-empty">Waiting —</div>'; $('log-count').textContent = '0 events'; return; }
-            body.innerHTML = log.map(e => '<div class="log-row"><span class="log-time">' + e.time + '</span><span class="log-level ' + e.level + '">' + (lmap[e.level] || 'INF') + '</span><span class="log-text">' + esc(e.msg) + '</span></div>').join('');
-            $('log-count').textContent = log.length + ' events'; body.scrollTop = body.scrollHeight;
+        function clearLog() {
+            _logCleared = true;
+            lastLogLen = 0;
+            $('log-body').innerHTML = '<div class="log-empty">Log cleared —</div>';
+            $('log-count').textContent = '0 events';
         }
-        function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+        function renderLog(log) {
+            if (_logCleared) {
+                _logCleared = false;
+                lastLogLen = log.length;
+                return;
+            }
+            if (log.length === lastLogLen) return;
+            lastLogLen = log.length;
+            const body = $('log-body'),
+                lmap = {
+                    info: 'INF',
+                    success: 'OK',
+                    warn: 'WRN',
+                    error: 'ERR'
+                };
+            if (!log.length) {
+                body.innerHTML = '<div class="log-empty">Waiting —</div>';
+                $('log-count').textContent = '0 events';
+                return;
+            }
+            body.innerHTML = log.map(e => '<div class="log-row"><span class="log-time">' + e.time + '</span><span class="log-level ' + e.level + '">' + (lmap[e.level] || 'INF') + '</span><span class="log-text">' + esc(e.msg) + '</span></div>').join('');
+            $('log-count').textContent = log.length + ' events';
+            body.scrollTop = body.scrollHeight;
+        }
+
+        function esc(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
 
         async function poll() {
             try {
 
-                const r = await fetch(FLASK_URL + '/api/status', { signal: AbortSignal.timeout(4000) });
+                const r = await fetch(FLASK_URL + '/api/status', {
+                    signal: AbortSignal.timeout(4000)
+                });
 
                 // const r = await fetch(FLASK_URL + '/api/status', {
                 //     signal: AbortSignal.timeout(4000),
@@ -1506,24 +1644,56 @@
                 //     }
                 // });
 
-
-
                 if (!r.ok) throw new Error('HTTP ' + r.status);
-                const d = await r.json(); setOnline();
-                const cfg = d.config || {}, restarting = !!d.restarting, finished = !!d.finished, curR = d.round || 1, maxR = d.max_rounds || cfg.MAX_ROUNDS || '?';
+                const d = await r.json();
+                setOnline();
+                const cfg = d.config || {},
+                    restarting = !!d.restarting,
+                    finished = !!d.finished,
+                    curR = d.round || 1,
+                    maxR = d.max_rounds || cfg.MAX_ROUNDS || '?';
                 $('finished-banner').classList.toggle('show', finished);
-                if (restarting) { $('restart-banner').classList.add('show'); $('h-round').classList.add('restarting');['btn-restart', 'btn-apply-restart', 'btn-apply-only'].forEach(id => $(id).disabled = true); }
-                else { $('restart-banner').classList.remove('show'); $('h-round').classList.remove('restarting');['btn-restart', 'btn-apply-restart', 'btn-apply-only'].forEach(id => $(id).disabled = false); }
-                if (prevRestart && !restarting) { populateDrawer(cfg); showToast('Restart Complete'); roundHistory = []; }
+                if (restarting) {
+                    $('restart-banner').classList.add('show');
+                    $('h-round').classList.add('restarting');
+                    ['btn-restart', 'btn-apply-restart', 'btn-apply-only'].forEach(id => $(id).disabled = true);
+                } else {
+                    $('restart-banner').classList.remove('show');
+                    $('h-round').classList.remove('restarting');
+                    ['btn-restart', 'btn-apply-restart', 'btn-apply-only'].forEach(id => $(id).disabled = false);
+                }
+                if (prevRestart && !restarting) {
+                    populateDrawer(cfg);
+                    showToast('Restart Complete');
+                    roundHistory = [];
+                }
                 prevRestart = restarting;
                 $('h-round').textContent = String(curR).padStart(2, '0');
                 $('h-status').textContent = finished ? 'All rounds complete' : restarting ? 'Re-initialising...' : d.aggregation_done ? 'Round ' + (curR - 1) + ' complete — ready' : (d.clients_uploaded + ' of ' + d.num_clients + ' clients reported');
                 const aggEl = $('h-agg');
-                if (finished) { aggEl.textContent = 'Training Finished'; aggEl.className = 'hero-agg finished'; }
-                else if (d.aggregation_done) { aggEl.textContent = 'Aggregation Complete'; aggEl.className = 'hero-agg complete'; }
-                else if (d.clients_uploaded >= d.num_clients && d.num_clients > 0) { aggEl.textContent = 'Aggregating…'; aggEl.className = 'hero-agg'; }
-                else { aggEl.textContent = 'Awaiting Aggregation'; aggEl.className = 'hero-agg'; }
-                if (d.aggregation_done && !prevAgg && !finished) { aggEl.style.transition = 'all 0s'; aggEl.style.outline = '2px solid #0a0a0a'; aggEl.style.outlineOffset = '4px'; setTimeout(() => { aggEl.style.transition = 'all 0.8s'; aggEl.style.outline = '2px solid transparent'; aggEl.style.outlineOffset = '12px'; }, 50); }
+                if (finished) {
+                    aggEl.textContent = 'Training Finished';
+                    aggEl.className = 'hero-agg finished';
+                } else if (d.aggregation_done) {
+                    aggEl.textContent = 'Aggregation Complete';
+                    aggEl.className = 'hero-agg complete';
+                } else if (d.clients_uploaded >= d.num_clients && d.num_clients > 0) {
+                    aggEl.textContent = 'Aggregating…';
+                    aggEl.className = 'hero-agg';
+                } else {
+                    aggEl.textContent = 'Awaiting Aggregation';
+                    aggEl.className = 'hero-agg';
+                }
+                if (d.aggregation_done && !prevAgg && !finished) {
+                    aggEl.style.transition = 'all 0s';
+                    aggEl.style.outline = '2px solid #0a0a0a';
+                    aggEl.style.outlineOffset = '4px';
+                    setTimeout(() => {
+                        aggEl.style.transition = 'all 0.8s';
+                        aggEl.style.outline = '2px solid transparent';
+                        aggEl.style.outlineOffset = '12px';
+                    }, 50);
+                }
                 prevAgg = d.aggregation_done;
                 const remR = typeof maxR === 'number' ? Math.max(0, maxR - curR + 1) : '?';
                 $('rounds-badge').textContent = 'Round ' + curR + ' / ' + maxR;
@@ -1531,7 +1701,10 @@
                 const repeating = !!cfg.REPETITIVE_TRAINING;
                 $('fleet-badge').textContent = 'Fleet: ' + (repeating ? 'Repeating' : 'One-Shot');
                 $('fleet-badge').classList.toggle('repeating', repeating);
-                $('m-modelid').textContent = cfg.MODEL_ID || '—'; $('m-dataid').textContent = cfg.DATA_ID || '—'; $('m-arch').textContent = cfg.ARCHITECTURE || '—'; $('m-dataset').textContent = cfg.DATASET || '—';
+                $('m-modelid').textContent = cfg.MODEL_ID || '—';
+                $('m-dataid').textContent = cfg.DATA_ID || '—';
+                $('m-arch').textContent = cfg.ARCHITECTURE || '—';
+                $('m-dataset').textContent = cfg.DATASET || '—';
                 $('m-maxclients').textContent = cfg.MAX_CLIENTS !== undefined ? cfg.MAX_CLIENTS : '—';
                 $('m-maxrounds').textContent = typeof maxR === 'number' ? curR + ' / ' + maxR : '—';
                 $('m-bins').textContent = cfg.N_BINS !== undefined ? cfg.N_BINS : '—';
@@ -1541,61 +1714,200 @@
                 $('m-classes').textContent = cfg.NUM_CLASSES !== undefined ? cfg.NUM_CLASSES : '—';
                 $('m-tflite').textContent = d.tflite_model_size_kb ? d.tflite_model_size_kb + ' KB' : '—';
                 $('m-ckpt').textContent = d.global_model_exists ? 'Saved' : 'Pending';
-                const rep = $('m-repeat'); rep.textContent = repeating ? 'On' : 'Off'; rep.className = 'metric-v ' + (repeating ? 'bool-on' : 'bool-off');
+                const rep = $('m-repeat');
+                rep.textContent = repeating ? 'On' : 'Off';
+                rep.className = 'metric-v ' + (repeating ? 'bool-on' : 'bool-off');
                 const dp = setBar('bf-dispatch', 'bk-dispatch', 'bv-dispatch', d.segments_dispatched || 0, d.segments_total || 1);
                 const up = setBar('bf-upload', 'bk-upload', 'bv-upload', d.clients_uploaded || 0, d.num_clients || 1);
                 const rp = d.aggregation_done ? 100 : Math.round((dp + up) / 2);
-                $('bf-round').style.width = rp + '%'; $('bk-round').style.left = rp + '%'; $('bv-round').textContent = rp + '%';
+                $('bf-round').style.width = rp + '%';
+                $('bk-round').style.left = rp + '%';
+                $('bv-round').textContent = rp + '%';
                 const devs = Array.isArray(d.assigned_devices) ? d.assigned_devices : [];
                 const devPct = Math.min(100, d.num_clients > 0 ? Math.round(devs.length / d.num_clients * 100) : 0);
-                $('bf-devices').style.width = devPct + '%'; $('bk-devices').style.left = devPct + '%'; $('bv-devices').textContent = devs.length;
+                $('bf-devices').style.width = devPct + '%';
+                $('bk-devices').style.left = devPct + '%';
+                $('bv-devices').textContent = devs.length;
                 const roundsPct = typeof maxR === 'number' && maxR > 0 ? Math.min(100, Math.round((curR - 1) / maxR * 100)) : 0;
-                $('bf-rounds-overall').style.width = roundsPct + '%'; $('bk-rounds-overall').style.left = roundsPct + '%'; $('bv-rounds-overall').textContent = (curR - 1) + ' / ' + maxR;
+                $('bf-rounds-overall').style.width = roundsPct + '%';
+                $('bk-rounds-overall').style.left = roundsPct + '%';
+                $('bv-rounds-overall').textContent = (curR - 1) + ' / ' + maxR;
                 const imgSz = cfg.INPUT_SHAPE ? cfg.INPUT_SHAPE[0] : (cfg.IMG_SIZE || '—');
-                $('fc-model').textContent = cfg.MODEL_ID || '—'; $('fc-bins').textContent = cfg.N_BINS !== undefined ? cfg.N_BINS : '—';
+                $('fc-model').textContent = cfg.MODEL_ID || '—';
+                $('fc-bins').textContent = cfg.N_BINS !== undefined ? cfg.N_BINS : '—';
                 $('fc-ipb').textContent = cfg.ITEMS_PER_BIN !== undefined ? cfg.ITEMS_PER_BIN.toLocaleString() : '—';
-                $('fc-cls').textContent = cfg.NUM_CLASSES || '—'; $('fc-img').textContent = imgSz ? imgSz + 'x' + imgSz : '—';
-                $('fc-epochs').textContent = cfg.NUM_EPOCHS || '—'; $('fc-batch').textContent = cfg.BATCH_SIZE || '—';
+                $('fc-cls').textContent = cfg.NUM_CLASSES || '—';
+                $('fc-img').textContent = imgSz ? imgSz + 'x' + imgSz : '—';
+                $('fc-epochs').textContent = cfg.NUM_EPOCHS || '—';
+                $('fc-batch').textContent = cfg.BATCH_SIZE || '—';
+                $('m-reward').textContent = cfg.CHECKPOINT_REWARD_RATE !== undefined ? cfg.CHECKPOINT_REWARD_RATE + ' MB' : '—';
+                $('fc-reward').textContent = cfg.CHECKPOINT_REWARD_RATE !== undefined ? cfg.CHECKPOINT_REWARD_RATE : '—';
                 $('fc-rounds').textContent = typeof maxR === 'number' ? curR + '/' + maxR : '—';
-                buildTree(getStep(d)); renderDevices(devs); updateHistory(curR, d.aggregation_done); renderLog(d.log || []); liveConfig = cfg;
-            } catch (e) { setOffline(); }
+                buildTree(getStep(d));
+                renderDevices(devs);
+                updateHistory(curR, d.aggregation_done);
+                renderLog(d.log || []);
+                liveConfig = cfg;
+                $('btn-pause').textContent = d.paused ? 'Resume' : 'Pause';
+            } catch (e) {
+                setOffline();
+            }
         }
 
         const INT_FIELDS = ['MAX_CLIENTS', 'MAX_ROUNDS', 'N_BINS', 'ITEMS_PER_BIN', 'NUM_EPOCHS', 'BATCH_SIZE', 'NUM_CLASSES', 'IMG_SIZE'];
         const STR_FIELDS = ['MODEL_ID', 'DATA_ID', 'DATASET', 'ARCHITECTURE'];
         const BOOL_FIELDS = ['REPETITIVE_TRAINING'];
+        const FLOAT_FIELDS = ['CHECKPOINT_REWARD_RATE'];
+
         function populateDrawer(cfg) {
-            INT_FIELDS.forEach(k => { const el = $('cfg-' + k); if (!el) return; const val = k === 'IMG_SIZE' ? (cfg.INPUT_SHAPE ? cfg.INPUT_SHAPE[0] : cfg.IMG_SIZE) : cfg[k]; if (val !== undefined) { el.value = val; el.classList.remove('changed'); } });
-            STR_FIELDS.forEach(k => { const el = $('cfg-' + k); if (el && cfg[k] !== undefined) { el.value = cfg[k]; el.classList.remove('changed'); } });
-            BOOL_FIELDS.forEach(k => { const el = $('cfg-' + k); if (el && cfg[k] !== undefined) el.checked = !!cfg[k]; });
+            INT_FIELDS.forEach(k => {
+                const el = $('cfg-' + k);
+                if (!el) return;
+                const val = k === 'IMG_SIZE' ? (cfg.INPUT_SHAPE ? cfg.INPUT_SHAPE[0] : cfg.IMG_SIZE) : cfg[k];
+                if (val !== undefined) {
+                    el.value = val;
+                    el.classList.remove('changed');
+                }
+            });
+
+            FLOAT_FIELDS.forEach(k => {
+                const el = $('cfg-' + k);
+                if (el && cfg[k] !== undefined) {
+                    el.value = cfg[k];
+                    el.classList.remove('changed');
+                }
+            });
+
+            STR_FIELDS.forEach(k => {
+                const el = $('cfg-' + k);
+                if (el && cfg[k] !== undefined) {
+                    el.value = cfg[k];
+                    el.classList.remove('changed');
+                }
+            });
+            BOOL_FIELDS.forEach(k => {
+                const el = $('cfg-' + k);
+                if (el && cfg[k] !== undefined) el.checked = !!cfg[k];
+            });
         }
+
         function getDrawerValues() {
             const out = {};
-            INT_FIELDS.forEach(k => { const el = $('cfg-' + k); if (el && el.value !== '') out[k] = parseInt(el.value, 10); });
-            STR_FIELDS.forEach(k => { const el = $('cfg-' + k); if (el && el.value.trim()) out[k] = el.value.trim(); });
-            BOOL_FIELDS.forEach(k => { const el = $('cfg-' + k); if (el) out[k] = el.checked; });
+            INT_FIELDS.forEach(k => {
+                const el = $('cfg-' + k);
+                if (el && el.value !== '') out[k] = parseInt(el.value, 10);
+            });
+            FLOAT_FIELDS.forEach(k => {
+                const el = $('cfg-' + k);
+                if (el && el.value !== '') out[k] = parseFloat(el.value);
+            });
+            STR_FIELDS.forEach(k => {
+                const el = $('cfg-' + k);
+                if (el && el.value.trim()) out[k] = el.value.trim();
+            });
+            BOOL_FIELDS.forEach(k => {
+                const el = $('cfg-' + k);
+                if (el) out[k] = el.checked;
+            });
             return out;
         }
-        function openDrawer() { populateDrawer(liveConfig);[...INT_FIELDS, ...STR_FIELDS].forEach(k => { const el = $('cfg-' + k); if (el) el.oninput = () => el.classList.add('changed'); }); $('drawer').classList.add('open'); $('overlay').classList.add('open'); }
-        function closeDrawer() { $('drawer').classList.remove('open'); $('overlay').classList.remove('open'); }
+
+        function openDrawer() {
+            populateDrawer(liveConfig);
+            [...INT_FIELDS, ...STR_FIELDS, ...FLOAT_FIELDS].forEach(k => {
+                const el = $('cfg-' + k);
+                if (el) el.oninput = () => el.classList.add('changed');
+            });
+            $('drawer').classList.add('open');
+            $('overlay').classList.add('open');
+        }
+
+        function closeDrawer() {
+            $('drawer').classList.remove('open');
+            $('overlay').classList.remove('open');
+        }
 
         async function applyOnly() {
-            try { const r = await fetch(FLASK_URL + '/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(getDrawerValues()) }); const data = await r.json(); if (data.errors && data.errors.length) { showToast('Error: ' + data.errors[0]); return; } liveConfig = data.config || liveConfig; populateDrawer(liveConfig); closeDrawer(); showToast('Config Applied'); }
-            catch (e) { showToast('Request Failed'); }
+            try {
+                const r = await fetch(FLASK_URL + '/api/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(getDrawerValues())
+                });
+                const data = await r.json();
+                if (data.errors && data.errors.length) {
+                    showToast('Error: ' + data.errors[0]);
+                    return;
+                }
+                liveConfig = data.config || liveConfig;
+                populateDrawer(liveConfig);
+                closeDrawer();
+                showToast('Config Applied');
+            } catch (e) {
+                showToast('Request Failed');
+            }
         }
-        async function applyAndRestart() { const vals = getDrawerValues(); closeDrawer(); await doRestart(vals); }
+        async function applyAndRestart() {
+            const vals = getDrawerValues();
+            closeDrawer();
+            await doRestart(vals);
+        }
         async function confirmRestart() {
             const btn = $('btn-restart');
-            if (btn.dataset.confirm !== 'yes') { btn.textContent = 'Confirm?'; btn.dataset.confirm = 'yes'; setTimeout(() => { btn.textContent = 'Restart'; btn.dataset.confirm = ''; }, 3000); return; }
-            btn.textContent = 'Restart'; btn.dataset.confirm = ''; await doRestart(null);
+            if (btn.dataset.confirm !== 'yes') {
+                btn.textContent = 'Confirm?';
+                btn.dataset.confirm = 'yes';
+                setTimeout(() => {
+                    btn.textContent = 'Restart';
+                    btn.dataset.confirm = '';
+                }, 3000);
+                return;
+            }
+            btn.textContent = 'Restart';
+            btn.dataset.confirm = '';
+            await doRestart(null);
+        }
+        async function togglePause() {
+            try {
+                const r = await fetch(FLASK_URL + '/api/pause', { method: 'POST' });
+                const data = await r.json();
+                $('btn-pause').textContent = data.paused ? 'Resume' : 'Pause';
+                showToast(data.paused ? 'Server Paused' : 'Server Resumed');
+            } catch (e) { showToast('Request Failed'); }
         }
         async function doRestart(cfg) {
-            try { await fetch(FLASK_URL + '/api/restart', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg ? { config: cfg } : {}) }); showToast('Restarting…'); lastLogLen = 0; prevDevices = []; }
-            catch (e) { showToast('Restart Failed'); }
+            try {
+                await fetch(FLASK_URL + '/api/restart', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(cfg ? {
+                        config: cfg
+                    } : {})
+                });
+                showToast('Restarting…');
+                lastLogLen = 0;
+                prevDevices = [];
+            } catch (e) {
+                showToast('Restart Failed');
+            }
         }
-        let _tt; function showToast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(_tt); _tt = setTimeout(() => t.classList.remove('show'), 2800); }
+        let _tt;
 
-        buildTree(0); poll(); setInterval(poll, 2000);
+        function showToast(msg) {
+            const t = $('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            clearTimeout(_tt);
+            _tt = setTimeout(() => t.classList.remove('show'), 2800);
+        }
+
+        buildTree(0);
+        poll();
+        setInterval(poll, 2000); 
     </script>
 </body>
 
