@@ -1,0 +1,25 @@
+<svg width="49" height="43" viewBox="0 0 49 43" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    /* Default color (Ink for Light Mode) */
+    .fractal-path { fill: #181818; transition: fill 0.3s ease; }
+
+    /* White color for Dark Mode */
+    @media (prefers-color-scheme: dark) {
+      .fractal-path { fill: #ffffff; }
+    }
+  </style>
+  <g class="fractal-logo">
+    <path class="fractal-path" fill-rule="evenodd" d="M42.146 5.86L45.684 12.061V22.391L38.582 34.481L31.486 22.391V12.061L35.029 5.851L38.582 3.859L42.146 5.86Z"/>
+    <path class="fractal-path" fill-rule="evenodd" d="M18.618 5.882L18.646 10.821L22.226 17.013L30.672 21.807L30.735 12.108L27.155 5.916L22.88 3.418L20.06 3.452L18.618 5.882Z"/>
+    <path class="fractal-path" fill-rule="evenodd" d="M8.653 11.587L10.397 14.563L14.726 17.058L21.508 17.013L18.156 11.127L13.827 8.631L10.368 8.611L8.675 9.614L8.653 11.587Z"/>
+    <path class="fractal-path" fill-rule="evenodd" d="M4.636 18.51L6.706 19.697H10.154L14.19 17.315L10.154 14.934H6.706L4.633 16.122L3.968 17.315L4.636 18.51Z"/>
+    <path class="fractal-path" fill-rule="evenodd" d="M4.612 24.071L6.243 24.061L8.287 22.883L9.87 20.102L6.668 20.082L4.623 21.26L3.798 22.668L3.81 23.596L4.612 24.071Z"/>
+    <path class="fractal-path" fill-rule="evenodd" d="M6.542 27.464L7.513 26.897L8.327 25.49V23.285L6.392 24.375L5.579 25.782V26.906L5.899 27.457L6.542 27.464Z"/>
+    <path class="fractal-path" fill-rule="evenodd" d="M8.862 28.882L9.239 28.224V27.126L8.482 25.842L7.726 27.126V28.224L8.104 28.883L8.482 29.095L8.862 28.882Z"/>
+    <path class="fractal-path" fill-rule="evenodd" d="M10.77 28.927L10.767 28.415L10.396 27.772L9.519 27.275L9.513 28.281L9.884 28.924L10.328 29.183L10.62 29.179L10.77 28.927Z"/>
+    <path class="fractal-path" d="M11.303 27.527L11.873 27.198L11.82 27.105L11.303 27.403L10.569 27.378L9.674 26.832L8.93 25.491L8.955 23.299L10.574 20.547L14.658 18.218L21.443 18.244L29.991 23.209L36.936 35.084V40.228L37.768 41.79V35.084L30.682 22.81L21.775 17.668H14.658L10.349 20.156L8.639 23.117V25.491L9.477 26.946L10.483 27.527H11.303Z"/>
+    <path class="fractal-path" fill-rule="evenodd" d="M31.003 10.223L33.162 6.51L34.123 6.151L31 11.56L27.918 6.172L28.855 6.533L31.003 10.223Z"/>
+    <path class="fractal-path" fill-rule="evenodd" d="M17.606 9.772V6.971L18.039 6.455V10.527L14.556 8.49L15.2 8.388L17.606 9.772Z"/>
+    <path class="fractal-path" fill-rule="evenodd" d="M9.372 14.253L8.457 12.657L8.529 12.225L9.866 14.54L7.216 14.525L7.549 14.256L9.372 14.253Z"/>
+  </g>
+</svg>
