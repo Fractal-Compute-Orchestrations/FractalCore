@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  fractal-server:
+    build: .
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    volumes:
+      - ./src/fractal_server/uploads:/app/src/fractal_server/uploads
+      - ./src/fractal_server/downloads:/app/src/fractal_server/downloads
+      - ./src/fractal_server/tenants:/app/src/fractal_server/tenants
+      - ./src/fractal_server/global_model:/app/src/fractal_server/global_model
+    restart: unless-stopped
+
+  # Optional: Single user server for experimental use
+  # fractal-single:
+  #   build: .
+  #   ports:
+  #     - "5001:5000"
+  #   env_file:
+  #     - .env
+  #   command: python src/experimental/single_user_server/server.py

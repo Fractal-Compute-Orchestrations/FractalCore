@@ -1,0 +1,16 @@
+# Handle line endings automatically for files detected as text
+# and truly force Windows line endings for specific files
+* text=auto
+
+# Python files
+*.py text eol=lf
+
+# Markdown and text files
+*.md text
+*.txt text
+
+# Binary files
+*.bin binary
+*.tflite binary
+*.ckpt binary
+*.json text

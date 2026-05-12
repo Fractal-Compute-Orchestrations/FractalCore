@@ -1,0 +1,10 @@
+flask
+flask-cors
+tensorflow>=2.15.0
+numpy
+firebase-admin
+google-cloud-firestore
+python-dotenv
+pathlib
+typing-extensions
+gunicorn
