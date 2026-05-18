@@ -22,7 +22,7 @@ from firebase_admin import credentials, firestore as fb_firestore
 from google.cloud.firestore_v1 import Increment
 from google.cloud.firestore_v1.base_query import FieldFilter # <-- THE WARNING FIX
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 SECRETS_DIR  = os.path.join(PROJECT_ROOT, "secrets")
 DATA_DIR     = os.path.join(PROJECT_ROOT, "data")
 
@@ -315,7 +315,7 @@ def create_android_ready_bins(n_bins, output_dir, items_per_bin, shuffle=True):
         (save_path / lbl_name).write_bytes(labels[s:e].tobytes())
         bin_files.append((img_name, lbl_name))
         if i == 0:
-            add_log(f"Bin 0 → images {(save_path/img_name).stat().st_size}B  "
+            add_log(f"Bin 0 -> images {(save_path/img_name).stat().st_size}B  "
                     f"labels {(save_path/lbl_name).stat().st_size}B", "info")
 
     add_log(f"{n_bins} bin pair(s) written to '{save_path}'", "success")
@@ -458,7 +458,7 @@ def get_current_task():
     # ─────────────────────────────────────────────────────────────────────────
 
     add_log(
-        f"Task {id_registry.readable(task['task_Id'])} → {device_id} "
+        f"Task {id_registry.readable(task['task_Id'])} -> {device_id} "
         f"({len(assigned_devices)}/{CONFIG['MAX_CLIENTS']})", "success"
     )
     return jsonify(task)
@@ -673,7 +673,7 @@ if __name__ == "__main__":
 
     print("===================================================")
     print(" FRACTAL FEDERATED LEARNING SERVER")
-    print(f" Dashboard  →  http://127.0.0.1:5000/")
+    print(f" Dashboard  ->  http://127.0.0.1:5000/")
     print(f" MODEL_ID:                   {CONFIG['MODEL_ID']}")
     print(f" DATA_ID:                    {CONFIG['DATA_ID']}")
     print(f" MAX CLIENTS PER ROUND:      {CONFIG['MAX_CLIENTS']}")
@@ -686,4 +686,4 @@ if __name__ == "__main__":
     print(f" TASKS IN QUEUE:             {len(task_queue)}")
     print("===================================================")
 
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=True)

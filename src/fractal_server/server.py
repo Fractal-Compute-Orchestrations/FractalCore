@@ -26,6 +26,8 @@ BASE_DIR              = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT          = os.path.dirname(os.path.dirname(BASE_DIR))
 DATA_DIR              = os.path.join(PROJECT_ROOT, "data")
 SECRETS_DIR           = os.path.join(PROJECT_ROOT, "secrets")
+TENANTS_JSON          = os.path.join(SECRETS_DIR, "tenants.json")
+USE_FIRESTORE         = True
 
 # ── Firebase ──────────────────────────────────────────────────────────────────
 _SERVICE_ACCOUNT_PATH = os.getenv(
@@ -93,20 +95,42 @@ def add_cors(response):
 # ─────────────────────────────────────────────────────────────────────────────
 _token_store: dict = {}
 _token_lock = threading.Lock()
+tokens_json = os.path.join(SECRETS_DIR, "tokens.json")
+
+def _load_tokens():
+    global _token_store
+    if os.path.exists(tokens_json):
+        try:
+            with open(tokens_json) as f:
+                _token_store = json.load(f)
+        except Exception:
+            _token_store = {}
+    else:
+        _token_store = {}
+
+def _save_tokens():
+    try:
+        with open(tokens_json, "w") as f:
+            json.dump(_token_store, f, indent=2)
+    except Exception:
+        pass
 
 def _issue_token(user: str, role: str) -> str:
     token = secrets.token_hex(32)
     with _token_lock:
-        # Revoke any old tokens for this user so stale tabs can't steal sessions
+        _load_tokens()
         stale = [k for k, v in _token_store.items() if v["user"] == user]
         for k in stale:
             del _token_store[k]
         _token_store[token] = {"user": user, "role": role}
+        _save_tokens()
     return token
 
 def _revoke_token(token: str):
     with _token_lock:
+        _load_tokens()
         _token_store.pop(token, None)
+        _save_tokens()
 
 def _get_auth() -> dict:
     """Authenticate ONLY from X-Auth-Token header. No cookie fallback.
@@ -116,6 +140,7 @@ def _get_auth() -> dict:
     if not token:
         return {}
     with _token_lock:
+        _load_tokens()
         return dict(_token_store.get(token, {}))
 
 
@@ -440,7 +465,29 @@ def _next_n() -> int:
 #         print(f"[!] Could not save tenants.json: {e}")
 
 def _save_tenants():
-    """Persist tenant credentials and config to Firestore."""
+    """Persist tenant credentials and config to Firestore or local tenants.json."""
+    if not USE_FIRESTORE:
+        data = []
+        with _tenants_lock:
+            for username, t in _tenants.items():
+                s: TenantSession = t["session"]
+                data.append({
+                    "username":        username,
+                    "password":        t["password"],
+                    "n":               t["n"],
+                    "max_tflops":      t["max_tflops"],
+                    "total_device_mbs": t["total_device_mbs"],
+                    "active":          t["active"],
+                    "config":          s.config,
+                })
+        try:
+            with open(TENANTS_JSON, "w") as f:
+                json.dump({"tenant_counter": _tenant_counter, "tenants": data}, f, indent=2)
+            print(f"[+] Saved tenants to {TENANTS_JSON}")
+        except Exception as e:
+            print(f"[!] Could not save tenants.json: {e}")
+        return
+
     try:
         # 1. Save the global tenant counter
         _db.collection("system").document("metadata").set({"tenant_counter": _tenant_counter}, merge=True)
@@ -464,8 +511,41 @@ def _save_tenants():
 
 
 def _load_tenants():
-    """Load tenants from Firestore on server startup."""
+    """Load tenants from Firestore or local tenants.json on server startup."""
     global _tenant_counter
+    if not USE_FIRESTORE:
+        if not os.path.exists(TENANTS_JSON):
+            return
+        try:
+            with open(TENANTS_JSON) as f:
+                saved = json.load(f)
+            with _tenant_counter_lock:
+                _tenant_counter = saved.get("tenant_counter", 0)
+            count = 0
+            for entry in saved.get("tenants", []):
+                username = entry["username"]
+                n        = entry["n"]
+                sess     = TenantSession(username, n)
+                sess.config.update(entry.get("config", {}))
+                max_tflops = entry.get("max_tflops", 1.0)
+                active     = entry.get("active", True)
+                with _tenants_lock:
+                    _tenants[username] = {
+                        "password":        entry["password"],
+                        "n":               n,
+                        "max_tflops":      max_tflops,
+                        "total_device_mbs": entry.get("total_device_mbs", 150.0),
+                        "active":          active,
+                        "session":         sess,
+                    }
+                if active:
+                    sess.start(max_tflops)
+                count += 1
+            print(f"[+] Loaded {count} tenant(s) from tenants.json")
+        except Exception as e:
+            print(f"[!] Could not load tenants.json: {e}")
+        return
+
     try:
         # 1. Load the global tenant counter
         meta_doc = _db.collection("system").document("metadata").get()
@@ -483,16 +563,20 @@ def _load_tenants():
             
             sess = TenantSession(username, n)
             sess.config.update(entry.get("config", {}))
+            max_tflops = entry.get("max_tflops", 1.0)
+            active     = entry.get("active", True)
             
             with _tenants_lock:
                 _tenants[username] = {
                     "password":        entry.get("password", ""),
                     "n":               n,
-                    "max_tflops":      entry.get("max_tflops", 1.0),
+                    "max_tflops":      max_tflops,
                     "total_device_mbs": entry.get("total_device_mbs", 150.0),
-                    "active":          entry.get("active", True),
+                    "active":          active,
                     "session":         sess,
                 }
+            if active:
+                sess.start(max_tflops)
             count += 1
         print(f"[+] Loaded {count} tenant(s) from Firestore.")
     except Exception as e:
@@ -544,6 +628,8 @@ def create_tenant(username: str, password: str, max_tflops: float,
             "n":               n,
             "session":         sess,
         }
+        if active:
+            sess.start(float(max_tflops))
     _save_tenants()
     return True, n
 
@@ -573,6 +659,19 @@ def _get_next_tenant_rr():
 
 # ── Firebase ──────────────────────────────────────────────────────────────────
 def _get_email_by_device_id(device_id: str) -> Optional[str]:
+    if not USE_FIRESTORE:
+        devices_json = os.path.join(SECRETS_DIR, "registered_devices.json")
+        if os.path.exists(devices_json):
+            try:
+                with open(devices_json) as f:
+                    devices = json.load(f)
+                for d in devices:
+                    if d.get("hardwareId") == device_id:
+                        return d.get("email")
+            except Exception as e:
+                print(f"[Local Storage] Device lookup: {e}")
+        return "user@example.com"
+
     try:
         docs = (_db.collection("registered_devices")
                    .where(filter=FieldFilter("hardwareId", "==", device_id))
@@ -588,6 +687,31 @@ def credit_mbs_for_device(device_id: str, mbs: float) -> bool:
     email = _get_email_by_device_id(device_id)
     if not email: return False
     MAX_CAP = 2048.0
+
+    if not USE_FIRESTORE:
+        users_json = os.path.join(SECRETS_DIR, "users.json")
+        try:
+            users = {}
+            if os.path.exists(users_json):
+                with open(users_json) as f:
+                    users = json.load(f)
+            
+            cur = users.get(email, {}).get("liquid_mbs", 0.0)
+            if cur >= MAX_CAP:
+                print(f"[Local Storage] Reward skipped: {email} already at MAX capacity (2GB).")
+                return True
+            
+            added = min(mbs, MAX_CAP - cur)
+            users[email] = {"liquid_mbs": cur + added}
+            
+            with open(users_json, "w") as f:
+                json.dump(users, f, indent=2)
+            print(f"[Local Storage] Credited +{added} MB to {email}. (Total: ~{cur + added}MB)")
+            return True
+        except Exception as e:
+            print(f"[Local Storage] Credit failed: {e}")
+            return False
+
     try:
         ref = _db.collection("users").document(email)
         cur = (ref.get().to_dict() or {}).get("liquid_mbs", 0.0)
@@ -772,12 +896,15 @@ def api_delete_tenant(username):
             return jsonify({"error": "Not found."}), 404
         del _tenants[username]
         
-    # 2. Update the persistent ledger (Explicit Firestore Delete)
-    try:
-        _db.collection("tenants").document(username).delete()
-        _save_tenants() # Sync remaining states if needed
-    except Exception as e:
-        print(f"[!] FRACTAL OS: Failed to delete tenant doc '{username}' from Firestore: {e}")
+    # 2. Update the persistent ledger (Explicit Firestore Delete or File-based sync)
+    if not USE_FIRESTORE:
+        _save_tenants()
+    else:
+        try:
+            _db.collection("tenants").document(username).delete()
+            _save_tenants() # Sync remaining states if needed
+        except Exception as e:
+            print(f"[!] FRACTAL OS: Failed to delete tenant doc '{username}' from Firestore: {e}")
     
     # 3. Physically wipe the tenant's data silo
     tenant_dir = os.path.join(DATA_DIR, "tenants", username)
@@ -941,7 +1068,7 @@ def get_current_task():
         _task_download_map[task["task_Id"]] = username
 
     s.add_log(
-        f"Task → {device_id} | tenant={username} | "
+        f"Task -> {device_id} | tenant={username} | "
         f"{len(s.assigned_devices)}/{s.config['MAX_CLIENTS']} | "
         f"{s.remaining_tflops:.4f} TF left | reward={task['reward_rate']} MB",
         "success",
@@ -954,10 +1081,22 @@ def upload_checkpoint():
     task_Id   = request.form.get("task_Id") or request.form.get("taskId") or "unknown"
     device_id = request.form.get("device_id", "unknown_device")
 
+    tenant_id = None
     with _global_task_tenant_lock:
         tenant_id = _global_task_tenant_map.pop(task_Id, None)
     with _task_download_lock:
         _task_download_map.pop(task_Id, None)
+
+    if not tenant_id:
+        # Fallback: if server reloaded, identify tenant via first 4 chars of task_Id (model_id prefix)
+        if len(task_Id) >= 4:
+            prefix = task_Id[:4]
+            with _tenants_lock:
+                for username, t in _tenants.items():
+                    s_tmp = t.get("session")
+                    if s_tmp and s_tmp.model_id == prefix:
+                        tenant_id = username
+                        break
 
     if not tenant_id: return "Unknown task_Id.", 400
 
@@ -1094,13 +1233,25 @@ def download_model():
 
     # ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    _load_tenants()   # Restore tenants from Firestore on startup
+    # Check Firestore connection & credentials on startup
+    USE_FIRESTORE = True
+    try:
+        print("[*] Verifying Firestore connection and credentials...")
+        # A quick metadata document fetch with a short 3-second timeout and no retry
+        _db.collection("system").document("metadata").get(retry=None, timeout=3)
+        print("[+] Firestore connection verified successfully.")
+    except Exception as e:
+        print(f"[!] Firestore authentication failed or timed out: {e}")
+        print("[!] Falling back to local JSON persistence ('tenants.json', etc.) for this run.")
+        USE_FIRESTORE = False
+
+    _load_tenants()   # Restore tenants from Firestore or local json on startup
     print("=" * 60)
-    print("  FRACTAL  ·  Multi-Tenant Federated Learning Server")
-    print("  Admin  → http://127.0.0.1:5000/admin")
-    print("  Tenant → http://127.0.0.1:5000/tenant")
+    print("  FRACTAL  .  Multi-Tenant Federated Learning Server")
+    print("  Admin  -> http://127.0.0.1:5000/admin")
+    print("  Tenant -> http://127.0.0.1:5000/tenant")
     print(f"  Persistence: Firebase Firestore") # <-- Fixed this line!
     print(f"  Shared model: {SHARED_MODEL_FILENAME}")
     print(f"  Auth: per-login token in sessionStorage (tab-isolated)")
     print("=" * 60)
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=True)
