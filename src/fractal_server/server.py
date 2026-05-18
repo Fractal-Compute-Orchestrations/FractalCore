@@ -371,9 +371,9 @@ class TenantSession:
                 self.id_registry.reset()
                 self._init_bins()
                 self._build_task_queue()
-                self.state["paused"] = False
+                self.state["paused"] = True
                 self.add_log(
-                    f"Session started. TFLOPs={max_tflops:.4f} | "
+                    f"Session started (PAUSED). TFLOPs={max_tflops:.4f} | "
                     f"Reward/task={self.config['CHECKPOINT_REWARD_RATE']} MB", "success")
             except Exception as e:
                 self.add_log(f"Session start failed: {e}", "error")
