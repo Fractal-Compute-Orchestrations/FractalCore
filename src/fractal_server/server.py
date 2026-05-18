@@ -260,7 +260,7 @@ class TenantSession:
             "assigned_devices": list(self.assigned_devices),
             "clients_uploaded": self.state["clients_uploaded"],
             "tflite_model_size_kb": tflite_kb,
-            "global_model_exists":  os.path.exists(self.global_ckpt_path + ".index"),
+            "global_model_exists":  os.path.exists(self.global_ckpt_path),
             "remaining_tflops":    round(self.remaining_tflops,     6),
             "max_tflops":          round(self.max_tflops,           6),
             "tflops_per_task":     round(_tflops_per_task(cfg),     6),
@@ -682,7 +682,7 @@ def _get_email_by_device_id(device_id: str) -> Optional[str]:
         print(f"[Firebase] Device lookup: {e}")
     return None
 
-def credit_mbs_for_device(device_id: str, mbs: float) -> bool:
+def credit_mbs_for_device(device_id: str, mbs: float, session = None) -> bool:
     if not device_id or device_id.lower() in ("unknown", ""): return False
     email = _get_email_by_device_id(device_id)
     if not email: return False
@@ -698,28 +698,50 @@ def credit_mbs_for_device(device_id: str, mbs: float) -> bool:
             
             cur = users.get(email, {}).get("liquid_mbs", 0.0)
             if cur >= MAX_CAP:
-                print(f"[Local Storage] Reward skipped: {email} already at MAX capacity (2GB).")
+                msg = f"[Local Storage] Reward skipped: {email} already at MAX capacity (2GB)."
+                print(msg)
+                if session: session.add_log(msg, "warn")
                 return True
             
             added = min(mbs, MAX_CAP - cur)
-            users[email] = {"liquid_mbs": cur + added}
+            new_bal = cur + added
+            users[email] = {"liquid_mbs": new_bal}
             
             with open(users_json, "w") as f:
                 json.dump(users, f, indent=2)
-            print(f"[Local Storage] Credited +{added} MB to {email}. (Total: ~{cur + added}MB)")
+            
+            msg = f"[Reward Engine] Device '{device_id}' successfully uploaded CKPT. Credited +{added:.4f} MB to '{email}'. New balance: {new_bal:.4f} MB."
+            print(msg)
+            if session: session.add_log(msg, "success")
             return True
         except Exception as e:
-            print(f"[Local Storage] Credit failed: {e}")
+            msg = f"[Local Storage] Credit failed for '{email}': {e}"
+            print(msg)
+            if session: session.add_log(msg, "error")
             return False
 
     try:
         ref = _db.collection("users").document(email)
         cur = (ref.get().to_dict() or {}).get("liquid_mbs", 0.0)
-        if cur >= MAX_CAP: return True
-        ref.set({"liquid_mbs": Increment(min(mbs, MAX_CAP - cur))}, merge=True)
+        if cur >= MAX_CAP:
+            msg = f"[Firebase] Reward skipped: {email} already at MAX capacity (2GB)."
+            print(msg)
+            if session: session.add_log(msg, "warn")
+            return True
+        
+        added = min(mbs, MAX_CAP - cur)
+        new_bal = cur + added
+        ref.set({"liquid_mbs": Increment(added)}, merge=True)
+        
+        msg = f"[Reward Engine] Device '{device_id}' successfully uploaded CKPT. Credited +{added:.4f} MB to Firestore user '{email}'. New balance: {new_bal:.4f} MB."
+        print(msg)
+        if session: session.add_log(msg, "success")
         return True
     except Exception as e:
-        print(f"[Firebase] Credit failed: {e}"); return False
+        msg = f"[Firebase] Credit failed for '{email}': {e}"
+        print(msg)
+        if session: session.add_log(msg, "error")
+        return False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1118,7 +1140,7 @@ def upload_checkpoint():
         di = s._task_device_map.pop(task_Id, None)
     if di:
         threading.Thread(target=credit_mbs_for_device,
-                         args=(di.get("device_id", device_id), di["reward_mbs"]),
+                         args=(di.get("device_id", device_id), di["reward_mbs"], s),
                          daemon=True).start()
     else:
         s.add_log(f"No dispatch record for {task_Id} — reward skipped.", "warn")
@@ -1250,8 +1272,8 @@ if __name__ == "__main__":
     print("  FRACTAL  .  Multi-Tenant Federated Learning Server")
     print("  Admin  -> http://127.0.0.1:5000/admin")
     print("  Tenant -> http://127.0.0.1:5000/tenant")
-    print(f"  Persistence: Firebase Firestore") # <-- Fixed this line!
+    print(f"  Persistence: {'Firebase Firestore' if USE_FIRESTORE else 'Local JSON (secrets/tenants.json)'}")
     print(f"  Shared model: {SHARED_MODEL_FILENAME}")
     print(f"  Auth: per-login token in sessionStorage (tab-isolated)")
     print("=" * 60)
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
