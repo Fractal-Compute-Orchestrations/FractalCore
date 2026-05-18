@@ -198,7 +198,7 @@ class TenantSession:
             "OUTPUT_TENSOR_NAME": {"loss": "FloatBuffer", "output": "FloatBuffer"},
             "DATASET":      "Fashion-MNIST",
             "ARCHITECTURE": "MobileNet",
-            "AUTO_DELETE_CHECKPOINTS": True,
+            "AUTO_DELETE_CHECKPOINTS": False,
         }
 
         self.state: dict = {
@@ -267,7 +267,7 @@ class TenantSession:
                 "MODEL_ID": cfg["MODEL_ID"], "DATA_ID": cfg["DATA_ID"],
                 "MAX_CLIENTS": cfg["MAX_CLIENTS"], "MAX_ROUNDS": cfg["MAX_ROUNDS"],
                 "REPETITIVE_TRAINING": cfg["REPETITIVE_TRAINING"],
-                "AUTO_DELETE_CHECKPOINTS": cfg.get("AUTO_DELETE_CHECKPOINTS", True),
+                "AUTO_DELETE_CHECKPOINTS": cfg.get("AUTO_DELETE_CHECKPOINTS", False),
                 "CHECKPOINT_REWARD_RATE": cfg.get("CHECKPOINT_REWARD_RATE", 0.0),
                 "N_BINS": cfg["N_BINS"], "ITEMS_PER_BIN": cfg["ITEMS_PER_BIN"],
                 "NUM_EPOCHS": cfg["NUM_EPOCHS"], "BATCH_SIZE": cfg["BATCH_SIZE"],
@@ -1012,7 +1012,7 @@ def upload_checkpoint():
             s.assigned_devices.clear()
             s.state.update({"clients_uploaded": 0, "segments_dispatched": 0,
                             "aggregation_done": False})
-            if s.config.get("AUTO_DELETE_CHECKPOINTS", True):
+            if s.config.get("AUTO_DELETE_CHECKPOINTS", False):
                 for x in [x for x in os.listdir(s.upload_dir) if x.endswith(".ckpt")]:
                     try: os.remove(os.path.join(s.upload_dir, x))
                     except OSError: pass
