@@ -16,6 +16,8 @@ from tensorflow import keras
 fashion_mnist = keras.datasets.fashion_mnist
 to_categorical = keras.utils.to_categorical
 from typing import Optional
+from firebase_reward import credit_mbs_for_device
+
 
 import firebase_admin
 from firebase_admin import credentials, firestore as fb_firestore
@@ -30,13 +32,7 @@ TENANTS_JSON          = os.path.join(SECRETS_DIR, "tenants.json")
 USE_FIRESTORE         = True
 
 # ── Firebase ──────────────────────────────────────────────────────────────────
-_SERVICE_ACCOUNT_PATH = os.getenv(
-    "FIREBASE_SERVICE_ACCOUNT_PATH",
-    os.path.join(SECRETS_DIR, "firebase", "service-account.json")
-)
-_fb_app = firebase_admin.initialize_app(credentials.Certificate(_SERVICE_ACCOUNT_PATH))
-
-_db = fb_firestore.client()
+from firebase_reward import _db
 
 # ── Flask ─────────────────────────────────────────────────────────────────────
 app = Flask(__name__)
@@ -202,6 +198,7 @@ class TenantSession:
             "OUTPUT_TENSOR_NAME": {"loss": "FloatBuffer", "output": "FloatBuffer"},
             "DATASET":      "Fashion-MNIST",
             "ARCHITECTURE": "MobileNet",
+            "AUTO_DELETE_CHECKPOINTS": True,
         }
 
         self.state: dict = {
@@ -465,110 +462,49 @@ def _next_n() -> int:
 #         print(f"[!] Could not save tenants.json: {e}")
 
 def _save_tenants():
-    """Persist tenant credentials and config to Firestore or local tenants.json."""
-    if not USE_FIRESTORE:
-        data = []
-        with _tenants_lock:
-            for username, t in _tenants.items():
-                s: TenantSession = t["session"]
-                data.append({
-                    "username":        username,
-                    "password":        t["password"],
-                    "n":               t["n"],
-                    "max_tflops":      t["max_tflops"],
-                    "total_device_mbs": t["total_device_mbs"],
-                    "active":          t["active"],
-                    "config":          s.config,
-                })
-        try:
-            with open(TENANTS_JSON, "w") as f:
-                json.dump({"tenant_counter": _tenant_counter, "tenants": data}, f, indent=2)
-            print(f"[+] Saved tenants to {TENANTS_JSON}")
-        except Exception as e:
-            print(f"[!] Could not save tenants.json: {e}")
-        return
-
+    """Persist tenant credentials and config to local tenants.json."""
+    data = []
+    with _tenants_lock:
+        for username, t in _tenants.items():
+            s: TenantSession = t["session"]
+            data.append({
+                "username":        username,
+                "password":        t["password"],
+                "n":               t["n"],
+                "max_tflops":      t["max_tflops"],
+                "total_device_mbs": t["total_device_mbs"],
+                "active":          t["active"],
+                "config":          s.config,
+            })
     try:
-        # 1. Save the global tenant counter
-        _db.collection("system").document("metadata").set({"tenant_counter": _tenant_counter}, merge=True)
-
-        # 2. Save each tenant
-        with _tenants_lock:
-            for username, t in _tenants.items():
-                s: TenantSession = t["session"]
-                doc_data = {
-                    "username":        username,
-                    "password":        t["password"],
-                    "n":               t["n"],
-                    "max_tflops":      t["max_tflops"],
-                    "total_device_mbs": t["total_device_mbs"],
-                    "active":          t["active"],
-                    "config":          s.config,
-                }
-                _db.collection("tenants").document(username).set(doc_data)
+        with open(TENANTS_JSON, "w") as f:
+            json.dump({"tenant_counter": _tenant_counter, "tenants": data}, f, indent=2)
+        print(f"[+] Saved tenants to {TENANTS_JSON}")
     except Exception as e:
-        print(f"[!] Could not save tenants to Firestore: {e}")
+        print(f"[!] Could not save tenants.json: {e}")
 
 
 def _load_tenants():
-    """Load tenants from Firestore or local tenants.json on server startup."""
+    """Load tenants from local tenants.json on server startup."""
     global _tenant_counter
-    if not USE_FIRESTORE:
-        if not os.path.exists(TENANTS_JSON):
-            return
-        try:
-            with open(TENANTS_JSON) as f:
-                saved = json.load(f)
-            with _tenant_counter_lock:
-                _tenant_counter = saved.get("tenant_counter", 0)
-            count = 0
-            for entry in saved.get("tenants", []):
-                username = entry["username"]
-                n        = entry["n"]
-                sess     = TenantSession(username, n)
-                sess.config.update(entry.get("config", {}))
-                max_tflops = entry.get("max_tflops", 1.0)
-                active     = entry.get("active", True)
-                with _tenants_lock:
-                    _tenants[username] = {
-                        "password":        entry["password"],
-                        "n":               n,
-                        "max_tflops":      max_tflops,
-                        "total_device_mbs": entry.get("total_device_mbs", 150.0),
-                        "active":          active,
-                        "session":         sess,
-                    }
-                if active:
-                    sess.start(max_tflops)
-                count += 1
-            print(f"[+] Loaded {count} tenant(s) from tenants.json")
-        except Exception as e:
-            print(f"[!] Could not load tenants.json: {e}")
+    if not os.path.exists(TENANTS_JSON):
         return
-
     try:
-        # 1. Load the global tenant counter
-        meta_doc = _db.collection("system").document("metadata").get()
-        if meta_doc.exists:
-            with _tenant_counter_lock:
-                _tenant_counter = meta_doc.to_dict().get("tenant_counter", 0)
-
-        # 2. Load all tenants
-        docs = _db.collection("tenants").stream()
+        with open(TENANTS_JSON) as f:
+            saved = json.load(f)
+        with _tenant_counter_lock:
+            _tenant_counter = saved.get("tenant_counter", 0)
         count = 0
-        for doc in docs:
-            entry = doc.to_dict()
-            username = entry.get("username", doc.id)
-            n        = entry.get("n", 0)
-            
-            sess = TenantSession(username, n)
+        for entry in saved.get("tenants", []):
+            username = entry["username"]
+            n        = entry["n"]
+            sess     = TenantSession(username, n)
             sess.config.update(entry.get("config", {}))
             max_tflops = entry.get("max_tflops", 1.0)
             active     = entry.get("active", True)
-            
             with _tenants_lock:
                 _tenants[username] = {
-                    "password":        entry.get("password", ""),
+                    "password":        entry["password"],
                     "n":               n,
                     "max_tflops":      max_tflops,
                     "total_device_mbs": entry.get("total_device_mbs", 150.0),
@@ -578,9 +514,9 @@ def _load_tenants():
             if active:
                 sess.start(max_tflops)
             count += 1
-        print(f"[+] Loaded {count} tenant(s) from Firestore.")
+        print(f"[+] Loaded {count} tenant(s) from tenants.json")
     except Exception as e:
-        print(f"[!] Could not load tenants from Firestore: {e}")
+        print(f"[!] Could not load tenants.json: {e}")
 
 # def _load_tenants():
 #     """Load tenants from tenants.json on server startup."""
@@ -656,92 +592,6 @@ def _get_next_tenant_rr():
                 return u, t
     return None, None
 
-
-# ── Firebase ──────────────────────────────────────────────────────────────────
-def _get_email_by_device_id(device_id: str) -> Optional[str]:
-    if not USE_FIRESTORE:
-        devices_json = os.path.join(SECRETS_DIR, "registered_devices.json")
-        if os.path.exists(devices_json):
-            try:
-                with open(devices_json) as f:
-                    devices = json.load(f)
-                for d in devices:
-                    if d.get("hardwareId") == device_id:
-                        return d.get("email")
-            except Exception as e:
-                print(f"[Local Storage] Device lookup: {e}")
-        return "user@example.com"
-
-    try:
-        docs = (_db.collection("registered_devices")
-                   .where(filter=FieldFilter("hardwareId", "==", device_id))
-                   .limit(1).stream())
-        for doc in docs:
-            return doc.to_dict().get("email")
-    except Exception as e:
-        print(f"[Firebase] Device lookup: {e}")
-    return None
-
-def credit_mbs_for_device(device_id: str, mbs: float, session = None) -> bool:
-    if not device_id or device_id.lower() in ("unknown", ""): return False
-    email = _get_email_by_device_id(device_id)
-    if not email: return False
-    MAX_CAP = 2048.0
-
-    if not USE_FIRESTORE:
-        users_json = os.path.join(SECRETS_DIR, "users.json")
-        try:
-            users = {}
-            if os.path.exists(users_json):
-                with open(users_json) as f:
-                    users = json.load(f)
-            
-            cur = users.get(email, {}).get("liquid_mbs", 0.0)
-            if cur >= MAX_CAP:
-                msg = f"[Local Storage] Reward skipped: {email} already at MAX capacity (2GB)."
-                print(msg)
-                if session: session.add_log(msg, "warn")
-                return True
-            
-            added = min(mbs, MAX_CAP - cur)
-            new_bal = cur + added
-            users[email] = {"liquid_mbs": new_bal}
-            
-            with open(users_json, "w") as f:
-                json.dump(users, f, indent=2)
-            
-            msg = f"[Reward Engine] Device '{device_id}' successfully uploaded CKPT. Credited +{added:.4f} MB to '{email}'. New balance: {new_bal:.4f} MB."
-            print(msg)
-            if session: session.add_log(msg, "success")
-            return True
-        except Exception as e:
-            msg = f"[Local Storage] Credit failed for '{email}': {e}"
-            print(msg)
-            if session: session.add_log(msg, "error")
-            return False
-
-    try:
-        ref = _db.collection("users").document(email)
-        cur = (ref.get().to_dict() or {}).get("liquid_mbs", 0.0)
-        if cur >= MAX_CAP:
-            msg = f"[Firebase] Reward skipped: {email} already at MAX capacity (2GB)."
-            print(msg)
-            if session: session.add_log(msg, "warn")
-            return True
-        
-        added = min(mbs, MAX_CAP - cur)
-        new_bal = cur + added
-        ref.set({"liquid_mbs": Increment(added)}, merge=True)
-        
-        msg = f"[Reward Engine] Device '{device_id}' successfully uploaded CKPT. Credited +{added:.4f} MB to Firestore user '{email}'. New balance: {new_bal:.4f} MB."
-        print(msg)
-        if session: session.add_log(msg, "success")
-        return True
-    except Exception as e:
-        msg = f"[Firebase] Credit failed for '{email}': {e}"
-        print(msg)
-        if session: session.add_log(msg, "error")
-        return False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -991,7 +841,7 @@ def api_tenant_config():
         if k in payload: proposed[k] = int(payload[k])
     if "IMG_SIZE" in payload:
         proposed["INPUT_SHAPE"] = [int(payload["IMG_SIZE"])] * 2
-    for k in ["REPETITIVE_TRAINING"]:
+    for k in ["REPETITIVE_TRAINING", "AUTO_DELETE_CHECKPOINTS"]:
         if k in payload: proposed[k] = bool(payload[k])
     for k in ["DATASET","ARCHITECTURE"]:
         if k in payload: proposed[k] = str(payload[k])
@@ -1131,19 +981,23 @@ def upload_checkpoint():
     f = request.files["model_file"]
     if f.filename == "": return "No file selected.", 400
 
+    with s._task_device_map_lock:
+        di = s._task_device_map.pop(task_Id, None)
+    
+    target_device_id = di.get("device_id") if di else device_id
+    reward_mbs       = di.get("reward_mbs") if di else float(s.config.get("CHECKPOINT_REWARD_RATE", 33.3333) or 33.3333)
+
     ts  = int(datetime.now().timestamp() * 1000)
-    fn  = f"{task_Id}_dev_{device_id}_{ts}.ckpt"
+    fn  = f"{task_Id}_{target_device_id}_{ts}.ckpt"
     f.save(os.path.join(s.upload_dir, fn))
     s.add_log(f"Received: {fn}", "success")
 
-    with s._task_device_map_lock:
-        di = s._task_device_map.pop(task_Id, None)
-    if di:
+    if target_device_id and target_device_id.lower() not in ("unknown", "unknown_device", ""):
         threading.Thread(target=credit_mbs_for_device,
-                         args=(di.get("device_id", device_id), di["reward_mbs"], s),
+                         args=(target_device_id, reward_mbs, s),
                          daemon=True).start()
     else:
-        s.add_log(f"No dispatch record for {task_Id} — reward skipped.", "warn")
+        s.add_log(f"Skipping reward: No valid device ID resolved for task {task_Id}.", "warn")
 
     received = [x for x in os.listdir(s.upload_dir) if x.endswith(".ckpt")]
     s.state["clients_uploaded"] = len(received)
@@ -1157,9 +1011,12 @@ def upload_checkpoint():
             s.assigned_devices.clear()
             s.state.update({"clients_uploaded": 0, "segments_dispatched": 0,
                             "aggregation_done": False})
-            for x in [x for x in os.listdir(s.upload_dir) if x.endswith(".ckpt")]:
-                try: os.remove(os.path.join(s.upload_dir, x))
-                except OSError: pass
+            if s.config.get("AUTO_DELETE_CHECKPOINTS", True):
+                for x in [x for x in os.listdir(s.upload_dir) if x.endswith(".ckpt")]:
+                    try: os.remove(os.path.join(s.upload_dir, x))
+                    except OSError: pass
+            else:
+                s.add_log("Auto-delete disabled: keeping round client checkpoints in uploads folder.", "info")
             if not s.state["finished"]:
                 s.add_log("Round reset. Ready for next round.", "info")
         threading.Thread(target=_agg, daemon=True).start()
@@ -1255,17 +1112,7 @@ def download_model():
 
     # ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    # Check Firestore connection & credentials on startup
     USE_FIRESTORE = True
-    try:
-        print("[*] Verifying Firestore connection and credentials...")
-        # A quick metadata document fetch with a short 3-second timeout and no retry
-        _db.collection("system").document("metadata").get(retry=None, timeout=3)
-        print("[+] Firestore connection verified successfully.")
-    except Exception as e:
-        print(f"[!] Firestore authentication failed or timed out: {e}")
-        print("[!] Falling back to local JSON persistence ('tenants.json', etc.) for this run.")
-        USE_FIRESTORE = False
 
     _load_tenants()   # Restore tenants from Firestore or local json on startup
     print("=" * 60)
