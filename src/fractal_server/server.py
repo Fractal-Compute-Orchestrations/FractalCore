@@ -267,6 +267,7 @@ class TenantSession:
                 "MODEL_ID": cfg["MODEL_ID"], "DATA_ID": cfg["DATA_ID"],
                 "MAX_CLIENTS": cfg["MAX_CLIENTS"], "MAX_ROUNDS": cfg["MAX_ROUNDS"],
                 "REPETITIVE_TRAINING": cfg["REPETITIVE_TRAINING"],
+                "AUTO_DELETE_CHECKPOINTS": cfg.get("AUTO_DELETE_CHECKPOINTS", True),
                 "CHECKPOINT_REWARD_RATE": cfg.get("CHECKPOINT_REWARD_RATE", 0.0),
                 "N_BINS": cfg["N_BINS"], "ITEMS_PER_BIN": cfg["ITEMS_PER_BIN"],
                 "NUM_EPOCHS": cfg["NUM_EPOCHS"], "BATCH_SIZE": cfg["BATCH_SIZE"],
