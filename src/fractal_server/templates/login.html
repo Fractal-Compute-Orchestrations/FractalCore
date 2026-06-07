@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fractal Grid — Login</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <style>
+        @font-face {
+            font-family: 'Genos';
+            src:url("{{ url_for('static',filename='Genos-VariableFont_wght.ttf') }}") format('truetype-variations');
+            font-weight: 100 900;
+            font-style: normal;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --ink: #0a0a0a;
+            --paper: #ffffff;
+            --muted: #888;
+            --light: #e0e0e0;
+            --mono: "Genos", sans-serif;
+        }
+
+        body {
+            background: var(--paper);
+            color: var(--ink);
+            font-family: var(--mono);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            letter-spacing: 0.15em;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 420px;
+            padding: 64px 44px;
+            border: 1px solid var(--ink);
+            text-align: center;
+            animation: fadeIn .8s cubic-bezier(.4, 0, .2, 1);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px)
+            }
+
+            to {
+                opacity: 1;
+                transform: none
+            }
+        }
+
+        .brand {
+            font-size: 30px;
+            font-weight: 700;
+            letter-spacing: 0.7em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            margin-right: -0.7em;
+        }
+
+        .sub {
+            font-size: 13px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.45em;
+            margin-bottom: 48px;
+            margin-right: -0.45em;
+        }
+
+        .divider {
+            height: 1px;
+            background: var(--light);
+            width: 40px;
+            margin: 0 auto 36px;
+        }
+
+        .group {
+            margin-bottom: 24px;
+            text-align: left;
+        }
+
+        label {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 10px;
+            display: block;
+            letter-spacing: 0.3em;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            background: transparent;
+            border: 1px solid var(--light);
+            padding: 13px;
+            font-family: var(--mono);
+            font-size: 17px;
+            color: var(--ink);
+            outline: none;
+            transition: border-color .3s;
+            letter-spacing: 0.15em;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            border-color: var(--ink);
+        }
+
+        .btn {
+            width: 100%;
+            background: var(--ink);
+            color: var(--paper);
+            border: 1px solid var(--ink);
+            padding: 15px;
+            font-family: var(--mono);
+            font-size: 13px;
+            letter-spacing: 0.45em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: background .2s, color .2s;
+            margin-top: 8px;
+        }
+
+        .btn:hover {
+            background: transparent;
+            color: var(--ink);
+        }
+
+        .error {
+            margin-top: 24px;
+            font-size: 12px;
+            color: var(--ink);
+            border-top: 1px solid var(--ink);
+            padding-top: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <div class="brand">FRACTAL</div>
+        <div class="sub">Federated Node Auth</div>
+        <div class="divider"></div>
+        <form action="/login" method="post">
+            <div class="group">
+                <label>Username</label>
+                <input type="text" name="username" required autofocus autocomplete="username">
+            </div>
+            <div class="group">
+                <label>System Key</label>
+                <input type="password" name="password" required placeholder="••••••••" autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn">Initialize Session</button>
+        </form>
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    </div>
+</body>
+
+</html>

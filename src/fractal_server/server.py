@@ -768,7 +768,7 @@ def api_delete_tenant(username):
         if username not in _tenants:
             return jsonify({"error": "Not found."}), 404
         del _tenants[username]
-        
+
     # 2. Update the persistent ledger (Explicit Firestore Delete or File-based sync)
     if not USE_FIRESTORE:
         _save_tenants()
@@ -778,7 +778,7 @@ def api_delete_tenant(username):
             _save_tenants() # Sync remaining states if needed
         except Exception as e:
             print(f"[!] FRACTAL OS: Failed to delete tenant doc '{username}' from Firestore: {e}")
-    
+
     # 3. Physically wipe the tenant's data silo
     tenant_dir = os.path.join(DATA_DIR, "tenants", username)
     if os.path.exists(tenant_dir):
@@ -984,7 +984,7 @@ def upload_checkpoint():
 
     with s._task_device_map_lock:
         di = s._task_device_map.pop(task_Id, None)
-    
+
     target_device_id = di.get("device_id") if di else device_id
     reward_mbs       = di.get("reward_mbs") if di else float(s.config.get("CHECKPOINT_REWARD_RATE", 33.3333) or 33.3333)
 

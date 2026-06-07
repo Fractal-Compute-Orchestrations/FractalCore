@@ -87,16 +87,11 @@ docs/_build/
 #   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
 #pdm.lock
 
-# runtime package data
-static/
-templates/
 # But wait, Flask templates/static might be needed for the UI.
 # I will only ignore the generated/uploaded data.
 uploads/
-downloads/
 tenants/
 android_training_bins/
-global_model/
 *.ckpt
 *.tflite
 *.bin
