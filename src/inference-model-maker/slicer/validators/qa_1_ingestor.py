@@ -1,32 +1,30 @@
 import torch
-from ..contracts import IngestOutput
+from slicer.contracts import IngestOutput
 
-class IngestQA:
+TARGET_PARAMS = 250_000_000
+TOLERANCE = 0.15
+
+def verify(output: IngestOutput) -> bool:
     """
     Quality Assurance for Step 1 Ingestor.
-    Validates that the output is a valid isolated PyTorch decoder block
-    with approximately 1/32nd of Llama 3 (8B) parameter count.
+    Asserts output is a valid isolated PyTorch decoder block
+    with parameter count ~1/32nd of Llama 3 (8B).
     """
-    def __init__(self, target_params: int = 250_000_000, tolerance: float = 0.15):
-        self.target_params = target_params
-        self.tolerance = tolerance
-
-    def verify(self, output: IngestOutput) -> bool:
-        print(f"[QA Ingestor] Running quality checks for Layer {output.layer_index}...")
-        
-        # 1. Type Assertion
-        assert isinstance(output, IngestOutput), "Output must be of type IngestOutput"
-        assert isinstance(output.module, torch.nn.Module), "Isolated asset must be a torch.nn.Module"
-        
-        # 2. Parameter Count Constraint (~250M parameters)
-        num_params = output.original_params
-        lower_bound = self.target_params * (1.0 - self.tolerance)
-        upper_bound = self.target_params * (1.0 + self.tolerance)
-        
-        assert lower_bound <= num_params <= upper_bound, (
-            f"Layer {output.layer_index} parameter count {num_params} "
-            f"violates contract target of {self.target_params} +/- {self.tolerance*100}%"
-        )
-        
-        print(f"[QA Ingestor] IngestQA contract check PASSED. Parameter count: {num_params}")
-        return True
+    print(f"[QA Ingestor] Running quality checks for Layer {output.layer_index}...")
+    
+    # 1. Type Assertion
+    assert isinstance(output, IngestOutput), "Output must be of type IngestOutput"
+    assert isinstance(output.module, torch.nn.Module), "Isolated asset must be a torch.nn.Module"
+    
+    # 2. Parameter Count Constraint (~250M parameters)
+    num_params = output.original_params
+    lower_bound = TARGET_PARAMS * (1.0 - TOLERANCE)
+    upper_bound = TARGET_PARAMS * (1.0 + TOLERANCE)
+    
+    assert lower_bound <= num_params <= upper_bound, (
+        f"Layer {output.layer_index} parameter count {num_params} "
+        f"violates contract target of {TARGET_PARAMS} +/- {TOLERANCE*100}%"
+    )
+    
+    print(f"[QA Ingestor] IngestQA contract check PASSED. Parameter count: {num_params}")
+    return True

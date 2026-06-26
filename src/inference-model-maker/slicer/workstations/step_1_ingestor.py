@@ -1,5 +1,5 @@
 import torch
-from ..contracts import IngestInput, IngestOutput
+from slicer.contracts import IngestInput, IngestOutput
 
 try:
     import transformers
@@ -32,7 +32,6 @@ class LlamaDecoderLayerMock(torch.nn.Module):
         self.post_attention_layernorm = torch.nn.LayerNorm(dim)
 
     def forward(self, x, kv_cache=None):
-        # Attention forward pass skeleton
         h = self.input_layernorm(x)
         q = self.q_proj(h)
         k = self.k_proj(h)
@@ -40,46 +39,45 @@ class LlamaDecoderLayerMock(torch.nn.Module):
         attn = self.o_proj(q)
         x = x + attn
         
-        # MLP forward pass skeleton
         h2 = self.post_attention_layernorm(x)
         ffn = self.down_proj(torch.nn.functional.silu(self.gate_proj(h2)) * self.up_proj(h2))
         return x + ffn
 
-class ModelIngestor:
-    """
-    Ingestion workstation. Ingests a model checkpoint,
-    isolates a target transformer layer module, and calculates its properties.
-    """
-    def execute(self, config: IngestInput) -> IngestOutput:
-        print(f"[Workstation 1] Loading model/checkpoint: '{config.model_id_or_path}'...")
-        
-        if HAS_TRANSFORMERS:
-            try:
-                # Real implementation loading from Hugging Face or local path
-                print(f"[Workstation 1] Using transformers to load '{config.model_id_or_path}'...")
-                model = AutoModelForCausalLM.from_pretrained(
-                    config.model_id_or_path, 
-                    device_map="cpu", 
-                    torch_dtype=torch.float16
-                )
-                # Map standard transformer block configurations (e.g. meta-llama/Llama)
-                if hasattr(model, 'model') and hasattr(model.model, 'layers'):
-                    isolated_layer = model.model.layers[config.layer_index]
-                elif hasattr(model, 'transformer') and hasattr(model.transformer, 'h'):
-                    isolated_layer = model.transformer.h[config.layer_index]
-                else:
-                    raise AttributeError("Could not identify decoder block list in this model structure.")
-            except Exception as e:
-                print(f"[Workstation 1] Load failed: {e}. Falling back to simulation layer model.")
-                isolated_layer = LlamaDecoderLayerMock()
-        else:
-            print("[Workstation 1] Transformers not found. Initializing Llama 3 (8B) simulation layer module.")
+def load_model(model_id: str):
+    """Loads model configurations and references (runs once)."""
+    print(f"[Workstation 1] Loading raw model model_id: '{model_id}'...")
+    return {"model_id": model_id}
+
+def isolate_layer(monolithic_model, layer_idx: int) -> IngestOutput:
+    """Isolates a target transformer layer block module."""
+    model_id = monolithic_model["model_id"]
+    print(f"[Workstation 1] Isolating Layer {layer_idx} from model '{model_id}'...")
+    
+    if HAS_TRANSFORMERS:
+        try:
+            print(f"[Workstation 1] Using transformers to load layer {layer_idx} from '{model_id}'...")
+            model = AutoModelForCausalLM.from_pretrained(
+                model_id, 
+                device_map="cpu", 
+                torch_dtype=torch.float16
+            )
+            if hasattr(model, 'model') and hasattr(model.model, 'layers'):
+                isolated_layer = model.model.layers[layer_idx]
+            elif hasattr(model, 'transformer') and hasattr(model.transformer, 'h'):
+                isolated_layer = model.transformer.h[layer_idx]
+            else:
+                raise AttributeError("Could not identify decoder block list in this model structure.")
+        except Exception as e:
+            print(f"[Workstation 1] Real load failed ({e}). Falling back to simulation model.")
             isolated_layer = LlamaDecoderLayerMock()
-            
-        param_count = sum(p.numel() for p in isolated_layer.parameters())
+    else:
+        print("[Workstation 1] Transformers not found. Using Llama 3 (8B) simulation layer module.")
+        isolated_layer = LlamaDecoderLayerMock()
         
-        return IngestOutput(
-            layer_index=config.layer_index,
-            module=isolated_layer,
-            original_params=param_count
-        )
+    param_count = sum(p.numel() for p in isolated_layer.parameters())
+    
+    return IngestOutput(
+        layer_index=layer_idx,
+        module=isolated_layer,
+        original_params=param_count
+    )

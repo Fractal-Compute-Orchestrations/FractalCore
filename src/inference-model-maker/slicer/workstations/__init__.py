@@ -1,13 +1,13 @@
-from .step_1_ingestor import ModelIngestor
-from .step_2_quantizer import ModelQuantizer
-from .step_3_tracer import ModelTracer
-from .step_4_delegator import ModelDelegator
-from .step_5_exporter import ModelExporter
+from . import step_1_ingestor
+from . import step_2_quantizer
+from . import step_3_tracer
+from . import step_4_delegator
+from . import step_5_exporter
 
 __all__ = [
-    'ModelIngestor',
-    'ModelQuantizer',
-    'ModelTracer',
-    'ModelDelegator',
-    'ModelExporter'
+    'step_1_ingestor',
+    'step_2_quantizer',
+    'step_3_tracer',
+    'step_4_delegator',
+    'step_5_exporter'
 ]
