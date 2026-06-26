@@ -1,0 +1,12 @@
+# Environment & secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Model assets (too large for git)
+assets/
+models/
+output/
