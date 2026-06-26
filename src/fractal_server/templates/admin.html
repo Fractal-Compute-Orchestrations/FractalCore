@@ -6,557 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fractal — Admin</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
-    <style>
-        @font-face {
-            font-family: 'Genos';
-            src:url("{{ url_for('static',filename='Genos-VariableFont_wght.ttf') }}") format('truetype-variations');
-            font-weight: 100 900;
-        }
-
-        *,
-        *::before,
-        *::after {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        :root {
-            --ink: #0a0a0a;
-            --paper: #fff;
-            --muted: #888;
-            --light: #e0e0e0;
-            --mono: 'Genos', sans-serif;
-        }
-
-        body {
-            background: var(--paper);
-            color: var(--ink);
-            font-family: var(--mono);
-            font-size: 17px;
-            letter-spacing: .1em;
-            min-height: 100vh;
-        }
-
-        .chrome {
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 18px 40px;
-            border-bottom: 1px solid var(--ink);
-            background: var(--paper);
-        }
-
-        .chrome-left {
-            display: flex;
-            align-items: center;
-            gap: 24px;
-        }
-
-        .chrome-title {
-            font-size: 22px;
-            font-weight: 700;
-            letter-spacing: .5em;
-            text-transform: uppercase;
-        }
-
-        .chrome-role {
-            font-size: 11px;
-            letter-spacing: .4em;
-            text-transform: uppercase;
-            color: var(--muted);
-            padding: 4px 10px;
-            border: 1px solid var(--light);
-        }
-
-        .btn {
-            font-family: var(--mono);
-            font-size: 13px;
-            letter-spacing: .3em;
-            text-transform: uppercase;
-            padding: 8px 18px;
-            border: 1px solid var(--ink);
-            background: transparent;
-            color: var(--ink);
-            cursor: pointer;
-            transition: background .15s, color .15s;
-            white-space: nowrap;
-        }
-
-        .btn:hover {
-            background: var(--ink);
-            color: var(--paper);
-        }
-
-        .btn.primary {
-            background: var(--ink);
-            color: var(--paper);
-        }
-
-        .btn.primary:hover {
-            background: #333;
-        }
-
-        .btn.danger {
-            border-color: #c00;
-            color: #c00;
-        }
-
-        .btn.danger:hover {
-            background: #c00;
-            color: var(--paper);
-        }
-
-        .btn.sm {
-            font-size: 11px;
-            padding: 5px 12px;
-        }
-
-        .page {
-            padding: 40px 40px 80px;
-            max-width: 1600px;
-            margin: 0 auto;
-        }
-
-        .section {
-            margin-bottom: 48px;
-        }
-
-        .section-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding-bottom: 14px;
-            border-bottom: 1px solid var(--ink);
-            margin-bottom: 24px;
-        }
-
-        .section-title {
-            font-size: 15px;
-            font-weight: 600;
-            letter-spacing: .4em;
-            text-transform: uppercase;
-        }
-
-        .create-form {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-            gap: 16px;
-            padding: 24px;
-            border: 1px solid var(--light);
-            margin-bottom: 8px;
-        }
-
-        .ff {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .ff label {
-            font-size: 11px;
-            letter-spacing: .35em;
-            text-transform: uppercase;
-            color: var(--muted);
-        }
-
-        .ff input {
-            font-family: var(--mono);
-            font-size: 15px;
-            letter-spacing: .1em;
-            border: 1px solid var(--light);
-            background: transparent;
-            color: var(--ink);
-            padding: 8px 10px;
-            outline: none;
-            transition: border-color .2s;
-        }
-
-        .ff input:focus {
-            border-color: var(--ink);
-        }
-
-        .ff input[type=checkbox] {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-        }
-
-        .ff .hint {
-            font-size: 10px;
-            letter-spacing: .2em;
-            color: #bbb;
-            margin-top: 2px;
-        }
-
-        .form-row {
-            display: flex;
-            align-items: flex-end;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-
-        .form-msg {
-            font-size: 12px;
-            letter-spacing: .2em;
-            min-height: 20px;
-        }
-
-        .form-msg.ok {
-            color: green;
-        }
-
-        .form-msg.err {
-            color: #c00;
-        }
-
-        /* Tenant grid — 10 columns */
-        .tg {
-            display: grid;
-            grid-template-columns: 32px 1.2fr 72px 72px 90px 140px 80px 100px 72px 110px 190px;
-            border-top: 1px solid var(--light);
-        }
-
-        .tg-h {
-            display: contents;
-        }
-
-        .tg-h>div {
-            font-size: 10px;
-            letter-spacing: .4em;
-            text-transform: uppercase;
-            color: var(--muted);
-            padding: 12px 8px;
-            border-bottom: 1px solid var(--light);
-        }
-
-        .tg-row {
-            display: contents;
-        }
-
-        .tg-row>div {
-            padding: 12px 8px;
-            border-bottom: 1px solid var(--light);
-            font-size: 13px;
-            letter-spacing: .07em;
-            display: flex;
-            align-items: center;
-            transition: background .1s;
-        }
-
-        .tg-row:hover>div {
-            background: #f8f8f8;
-        }
-
-        .tg-row.sel>div {
-            background: #f0f0f0;
-        }
-
-        .tg-actions {
-            display: flex;
-            gap: 5px;
-            flex-wrap: wrap;
-        }
-
-        .pill {
-            display: inline-block;
-            font-size: 10px;
-            letter-spacing: .3em;
-            text-transform: uppercase;
-            padding: 2px 8px;
-            border: 1px solid currentColor;
-        }
-
-        .pill-run {
-            color: var(--ink);
-        }
-
-        .pill-idle {
-            color: var(--muted);
-            border-color: var(--light);
-        }
-
-        .pill-fin {
-            color: #0a6;
-        }
-
-        .pill-paus {
-            color: #a60;
-        }
-
-        .pill-inac {
-            color: #c00;
-        }
-
-        .pill-start {
-            color: #55a;
-        }
-
-        .tf-cell {
-            display: flex;
-            flex-direction: column;
-            gap: 3px;
-            width: 100%;
-        }
-
-        .tf-nums {
-            font-size: 12px;
-        }
-
-        .tf-bar {
-            height: 2px;
-            background: var(--light);
-        }
-
-        .tf-fill {
-            height: 2px;
-            background: var(--ink);
-            transition: width .5s;
-        }
-
-        .tf-fill.low {
-            background: #a60;
-        }
-
-        .tf-fill.empty {
-            background: #c00;
-        }
-
-        .reward-badge {
-            font-size: 11px;
-            letter-spacing: .12em;
-            color: var(--muted);
-            background: #f5f5f5;
-            padding: 2px 6px;
-            border: 1px solid var(--light);
-        }
-
-        /* detail */
-        .detail {
-            border: 1px solid var(--ink);
-            padding: 24px;
-            margin-top: 24px;
-            display: none;
-        }
-
-        .detail.open {
-            display: block;
-        }
-
-        .d-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 20px;
-        }
-
-        .d-title {
-            font-size: 14px;
-            font-weight: 600;
-            letter-spacing: .4em;
-            text-transform: uppercase;
-        }
-
-        .d-cols {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 24px;
-        }
-
-        .d-grp h4 {
-            font-size: 10px;
-            letter-spacing: .4em;
-            text-transform: uppercase;
-            color: var(--muted);
-            padding-bottom: 8px;
-            border-bottom: 1px solid var(--light);
-            margin-bottom: 10px;
-        }
-
-        .d-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 6px 0;
-            border-bottom: 1px solid var(--light);
-            font-size: 13px;
-        }
-
-        .d-row:last-child {
-            border-bottom: none;
-        }
-
-        .d-k {
-            color: var(--muted);
-        }
-
-        .d-v {
-            font-weight: 500;
-        }
-
-        .log-box {
-            height: 160px;
-            overflow-y: auto;
-            background: #f8f8f8;
-            padding: 10px 12px;
-            margin-top: 16px;
-            font-size: 12px;
-            letter-spacing: .08em;
-            line-height: 1.7;
-        }
-
-        .log-ok {
-            color: #0a6;
-        }
-
-        .log-err {
-            color: #c00;
-        }
-
-        .log-warn {
-            color: #a60;
-        }
-
-        .mini-bar {
-            height: 3px;
-            background: var(--light);
-            position: relative;
-            margin-top: 5px;
-        }
-
-        .mini-fill {
-            position: absolute;
-            top: 0;
-            left: 0;
-            height: 3px;
-            background: var(--ink);
-            transition: width .5s;
-        }
-
-        .mini-fill.low {
-            background: #a60;
-        }
-
-        .mini-fill.empty {
-            background: #c00;
-        }
-
-        /* modal */
-        .modal-ov {
-            position: fixed;
-            inset: 0;
-            background: rgba(255, 255, 255, .6);
-            z-index: 300;
-            display: none;
-        }
-
-        .modal-ov.open {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal {
-            background: var(--paper);
-            border: 1px solid var(--ink);
-            padding: 32px 36px;
-            width: 500px;
-            max-width: 96vw;
-        }
-
-        .modal-title {
-            font-size: 14px;
-            font-weight: 600;
-            letter-spacing: .4em;
-            text-transform: uppercase;
-            margin-bottom: 24px;
-        }
-
-        .mf {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-
-        .mf-row {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .mf-row label {
-            font-size: 11px;
-            letter-spacing: .35em;
-            text-transform: uppercase;
-            color: var(--muted);
-        }
-
-        .mf-row input {
-            font-family: var(--mono);
-            font-size: 15px;
-            letter-spacing: .1em;
-            border: 1px solid var(--light);
-            background: transparent;
-            color: var(--ink);
-            padding: 8px 10px;
-            outline: none;
-            width: 100%;
-            transition: border-color .2s;
-        }
-
-        .mf-row input:focus {
-            border-color: var(--ink);
-        }
-
-        .mf-row .mf-hint {
-            font-size: 11px;
-            letter-spacing: .15em;
-            color: var(--muted);
-            background: #f5f5f5;
-            padding: 6px 10px;
-            border: 1px solid var(--light);
-        }
-
-        .modal-btns {
-            display: flex;
-            gap: 12px;
-        }
-
-        .toast {
-            position: fixed;
-            bottom: 24px;
-            left: 50%;
-            transform: translateX(-50%) translateY(20px);
-            background: var(--ink);
-            color: var(--paper);
-            font-size: 13px;
-            letter-spacing: .3em;
-            text-transform: uppercase;
-            padding: 10px 24px;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity .3s, transform .3s;
-            z-index: 999;
-            white-space: nowrap;
-        }
-
-        .toast.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
-
-        .grid-empty {
-            padding: 32px;
-            font-size: 13px;
-            letter-spacing: .3em;
-            color: #ccc;
-            text-transform: uppercase;
-            border-bottom: 1px solid var(--light);
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin-responsive.css') }}?v=2">
 </head>
 
 <body>
@@ -704,7 +154,7 @@
 
         function updateCreateReward() {
             const mbs = parseFloat($('c-total-mbs').value) || 0;
-            const maxClients = 3; // default; could read from a field if we had one
+            const maxClients = 3;
             const r = mbs > 0 ? mbs / maxClients : 0;
             $('create-reward-preview').textContent = r.toFixed(2) + ' MB / task';
         }
@@ -724,9 +174,17 @@
             if (r.redirected || r.status === 401 || r.status === 403) { window.location.href = '/login'; return {}; }
             return r.json();
         }
+
         function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
         let _tt;
-        function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(_tt); _tt = setTimeout(() => t.classList.remove('show'), 2800); }
+        function toast(msg) {
+            const t = $('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            clearTimeout(_tt);
+            _tt = setTimeout(() => t.classList.remove('show'), 2800);
+        }
 
         function pill(t) {
             if (!t.active) return '<span class="pill pill-inac">Inactive</span>';
@@ -747,36 +205,44 @@
             try { _tenants = await api('/api/admin/tenants'); renderTenants(); } catch (e) { }
         }
 
+        // Column labels used for the mobile card layout (data-label attributes)
+        const COL_LABELS = ['#', 'Username', 'Model', 'Data', 'TFLOPs', 'Remaining', 'Device MBs', 'Reward/Task', 'Active', 'Status', 'Actions'];
+
         function renderTenants() {
             const grid = $('tg'), empty = $('grid-empty');
             grid.querySelectorAll('.tg-row').forEach(r => r.remove());
             $('tenant-count').textContent = _tenants.length + ' tenant' + (_tenants.length === 1 ? '' : 's');
             if (!_tenants.length) { empty.style.display = 'block'; return; }
             empty.style.display = 'none';
+
             for (const t of _tenants) {
-                const rewardPerTask = (t.total_device_mbs || 0) / (t.num_clients || 3);
                 const row = document.createElement('div');
                 row.className = 'tg-row' + (_sel === t.username ? ' sel' : '');
-                row.innerHTML = `
-            <div>${t.n}</div>
-            <div><strong>${esc(t.username)}</strong></div>
-            <div style="font-size:12px">${t.model_id}</div>
-            <div style="font-size:12px">${t.data_id}</div>
-            <div style="font-size:13px">${t.max_tflops.toFixed(4)} TF</div>
-            <div>${tfCell(t.remaining_tflops, t.max_tflops)}</div>
-            <div style="font-size:13px">${(t.total_device_mbs || 0).toFixed(0)} MB</div>
-            <div><span class="reward-badge">${(t.reward_per_task || 0).toFixed(2)} MB/task</span></div>
-            <div style="font-size:13px">${t.active ? 'Yes' : 'No'}</div>
-            <div style="flex-direction:column;align-items:flex-start;gap:4px;">
-                ${pill(t)}
-                <small style="font-size:10px;color:var(--muted)">R${t.round}/${t.max_rounds}</small>
-            </div>
-            <div class="tg-actions">
-                <button class="btn sm" onclick="event.stopPropagation();openEdit('${t.username}')">Edit</button>
-                <button class="btn sm" onclick="event.stopPropagation();toggle('${t.username}')">${t.active ? 'Disable' : 'Enable'}</button>
-                <button class="btn sm" onclick="event.stopPropagation();selDetail('${t.username}')">${_sel === t.username ? 'Hide' : 'View'}</button>
-                <button class="btn sm danger" onclick="event.stopPropagation();del('${t.username}')">Del</button>
-            </div>`;
+
+                // Build 11 cell innerHTML strings
+                const cells = [
+                    `<div data-label="${COL_LABELS[0]}">${t.n}</div>`,
+                    `<div data-label="${COL_LABELS[1]}"><strong>${esc(t.username)}</strong></div>`,
+                    `<div data-label="${COL_LABELS[2]}" style="font-size:12px">${t.model_id}</div>`,
+                    `<div data-label="${COL_LABELS[3]}" style="font-size:12px">${t.data_id}</div>`,
+                    `<div data-label="${COL_LABELS[4]}" style="font-size:13px">${t.max_tflops.toFixed(4)} TF</div>`,
+                    `<div data-label="${COL_LABELS[5]}">${tfCell(t.remaining_tflops, t.max_tflops)}</div>`,
+                    `<div data-label="${COL_LABELS[6]}" style="font-size:13px">${(t.total_device_mbs || 0).toFixed(0)} MB</div>`,
+                    `<div data-label="${COL_LABELS[7]}"><span class="reward-badge">${(t.reward_per_task || 0).toFixed(2)} MB/task</span></div>`,
+                    `<div data-label="${COL_LABELS[8]}" style="font-size:13px">${t.active ? 'Yes' : 'No'}</div>`,
+                    `<div data-label="${COL_LABELS[9]}" style="flex-direction:column;align-items:flex-start;gap:4px;">
+                        ${pill(t)}
+                        <small style="font-size:10px;color:var(--muted)">R${t.round}/${t.max_rounds}</small>
+                    </div>`,
+                    `<div class="tg-actions">
+                        <button class="btn sm" onclick="event.stopPropagation();openEdit('${t.username}')">Edit</button>
+                        <button class="btn sm" onclick="event.stopPropagation();toggle('${t.username}')">${t.active ? 'Disable' : 'Enable'}</button>
+                        <button class="btn sm" onclick="event.stopPropagation();selDetail('${t.username}')">${_sel === t.username ? 'Hide' : 'View'}</button>
+                        <button class="btn sm danger" onclick="event.stopPropagation();del('${t.username}')">Del</button>
+                    </div>`
+                ];
+
+                row.innerHTML = cells.join('');
                 grid.appendChild(row);
             }
         }
@@ -797,6 +263,7 @@
             $('edit-ov').classList.add('open');
         }
         function closeEdit() { $('edit-ov').classList.remove('open'); _editU = null; }
+
         async function saveEdit() {
             const p = { max_tflops: parseFloat($('e-tflops').value), total_device_mbs: parseFloat($('e-total-mbs').value), active: $('e-active').checked };
             const pwd = $('e-pwd').value; if (pwd) p.password = pwd;

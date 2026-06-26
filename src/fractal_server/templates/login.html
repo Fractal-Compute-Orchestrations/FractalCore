@@ -3,13 +3,13 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Fractal Grid — Login</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <style>
         @font-face {
             font-family: 'Genos';
-            src:url("{{ url_for('static',filename='Genos-VariableFont_wght.ttf') }}") format('truetype-variations');
+            src: url("{{ url_for('static',filename='Genos-VariableFont_wght.ttf') }}") format('truetype-variations');
             font-weight: 100 900;
             font-style: normal;
         }
@@ -37,8 +37,11 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
+            /* Changed from height to min-height for better mobile rendering */
             letter-spacing: 0.15em;
+            padding: 20px;
+            /* Ensures the card never touches screen edges on mobile */
         }
 
         .card {
@@ -113,6 +116,10 @@
             outline: none;
             transition: border-color .3s;
             letter-spacing: 0.15em;
+            border-radius: 0;
+            /* Prevents iOS from adding default rounded corners */
+            -webkit-appearance: none;
+            /* Normalizes styling on mobile WebKit browsers */
         }
 
         input[type="text"]:focus,
@@ -133,6 +140,8 @@
             cursor: pointer;
             transition: background .2s, color .2s;
             margin-top: 8px;
+            border-radius: 0;
+            -webkit-appearance: none;
         }
 
         .btn:hover {
@@ -148,6 +157,34 @@
             padding-top: 16px;
             text-transform: uppercase;
             letter-spacing: 0.2em;
+        }
+
+        /* --- Mobile Responsiveness --- */
+        @media (max-width: 480px) {
+            .card {
+                padding: 48px 24px;
+                /* Reduces inner spacing to maximize usable area */
+            }
+
+            .brand {
+                font-size: 24px;
+                /* Scales down to prevent layout breaking */
+                letter-spacing: 0.5em;
+                margin-right: -0.5em;
+            }
+
+            .sub {
+                font-size: 11px;
+                letter-spacing: 0.3em;
+                margin-right: -0.3em;
+                margin-bottom: 36px;
+            }
+
+            input[type="text"],
+            input[type="password"] {
+                font-size: 16px;
+                /* 16px is critical on mobile to prevent automatic iOS zoom on focus */
+            }
         }
     </style>
 </head>

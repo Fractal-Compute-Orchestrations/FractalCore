@@ -1,6 +1,5 @@
 from flask import (Flask, jsonify, send_file, request,
-                   render_template, redirect, url_for,
-                   session as flask_session)
+                   render_template, redirect, url_for)
 import os, json, secrets, threading, shutil
 from dotenv import load_dotenv
 
@@ -12,6 +11,7 @@ import numpy as np
 from pathlib import Path
 from collections import deque
 from datetime import datetime, timedelta
+
 from tensorflow import keras
 fashion_mnist = keras.datasets.fashion_mnist
 to_categorical = keras.utils.to_categorical
@@ -20,9 +20,7 @@ from firebase_reward import credit_mbs_for_device
 
 
 import firebase_admin
-from firebase_admin import credentials, firestore as fb_firestore
-from google.cloud.firestore_v1 import Increment
-from google.cloud.firestore_v1.base_query import FieldFilter
+from firebase_admin import credentials
 
 BASE_DIR              = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT          = os.path.dirname(os.path.dirname(BASE_DIR))
@@ -404,7 +402,14 @@ class TenantSession:
                 self.add_log(f"Error: {os.path.basename(ckpt)}: {e}", "error")
         if n_ok == 0:
             self.add_log("ABORT: No valid checkpoints.", "error"); return
-        vals = [tf.convert_to_tensor(acc[k] / n_ok) for k in keys]
+        # n_ok > 0 guarantees every acc[k] was assigned in the loop above,
+        # but Pylance can't infer that. Use explicit narrowing so the
+        # `None`/`int` operator error disappears without losing type safety.
+        vals = []
+        for k in keys:
+            v = acc[k]
+            assert v is not None, f"acc['{k}'] is None despite n_ok={n_ok}"
+            vals.append(tf.convert_to_tensor(v / n_ok))
         tf.raw_ops.Save(filename=tf.constant(self.global_ckpt_path),
                         tensor_names=tf.constant(list(keys)), data=vals,
                         name="fed_save")
@@ -440,27 +445,6 @@ def _next_n() -> int:
         _tenant_counter += 1
         return _tenant_counter
 
-
-# def _save_tenants():
-#     """Persist tenant credentials and config to tenants.json."""
-#     data = []
-#     with _tenants_lock:
-#         for username, t in _tenants.items():
-#             s: TenantSession = t["session"]
-#             data.append({
-#                 "username":        username,
-#                 "password":        t["password"],
-#                 "n":               t["n"],
-#                 "max_tflops":      t["max_tflops"],
-#                 "total_device_mbs": t["total_device_mbs"],
-#                 "active":          t["active"],
-#                 "config":          s.config,
-#             })
-#     try:
-#         with open(TENANTS_JSON, "w") as f:
-#             json.dump({"tenant_counter": _tenant_counter, "tenants": data}, f, indent=2)
-#     except Exception as e:
-#         print(f"[!] Could not save tenants.json: {e}")
 
 def _save_tenants():
     """Persist tenant credentials and config to local tenants.json."""
@@ -518,34 +502,6 @@ def _load_tenants():
         print(f"[+] Loaded {count} tenant(s) from tenants.json")
     except Exception as e:
         print(f"[!] Could not load tenants.json: {e}")
-
-# def _load_tenants():
-#     """Load tenants from tenants.json on server startup."""
-#     global _tenant_counter
-#     if not os.path.exists(TENANTS_JSON):
-#         return
-#     try:
-#         with open(TENANTS_JSON) as f:
-#             saved = json.load(f)
-#         with _tenant_counter_lock:
-#             _tenant_counter = saved.get("tenant_counter", 0)
-#         for entry in saved.get("tenants", []):
-#             username = entry["username"]
-#             n        = entry["n"]
-#             sess     = TenantSession(username, n)
-#             sess.config.update(entry.get("config", {}))
-#             with _tenants_lock:
-#                 _tenants[username] = {
-#                     "password":        entry["password"],
-#                     "n":               n,
-#                     "max_tflops":      entry.get("max_tflops", 1.0),
-#                     "total_device_mbs": entry.get("total_device_mbs", 150.0),
-#                     "active":          entry.get("active", True),
-#                     "session":         sess,
-#                 }
-#         print(f"[+] Loaded {len(saved.get('tenants',[]))} tenant(s) from tenants.json")
-#     except Exception as e:
-#         print(f"[!] Could not load tenants.json: {e}")
 
 
 def create_tenant(username: str, password: str, max_tflops: float,
@@ -722,6 +678,11 @@ def api_create_tenant():
                           bool(d.get("active", True)))
     if not ok:
         return jsonify({"error": r}), 409
+    # create_tenant returns (bool, int | str); after the `ok` guard above
+    # the failure string is unreachable, but Pylance still sees the union.
+    # Narrow `r` to int explicitly so f"{r+1000:04d}" type-checks.
+    if not isinstance(r, int):
+        return jsonify({"error": "Unexpected server error."}), 500
     return jsonify({"success": True, "n": r,
                     "model_id": f"{r:04d}", "data_id": f"{r+1000:04d}"})
 
@@ -769,15 +730,12 @@ def api_delete_tenant(username):
             return jsonify({"error": "Not found."}), 404
         del _tenants[username]
 
-    # 2. Update the persistent ledger (Explicit Firestore Delete or File-based sync)
-    if not USE_FIRESTORE:
-        _save_tenants()
-    else:
-        try:
-            _db.collection("tenants").document(username).delete()
-            _save_tenants() # Sync remaining states if needed
-        except Exception as e:
-            print(f"[!] FRACTAL OS: Failed to delete tenant doc '{username}' from Firestore: {e}")
+    # 2. Update the persistent ledger (Firestore Delete + local sync)
+    try:
+        _db.collection("tenants").document(username).delete()
+        _save_tenants() # Sync remaining states if needed
+    except Exception as e:
+        print(f"[!] FRACTAL OS: Failed to delete tenant doc '{username}' from Firestore: {e}")
 
     # 3. Physically wipe the tenant's data silo
     tenant_dir = os.path.join(DATA_DIR, "tenants", username)
@@ -1111,10 +1069,8 @@ def download_model():
     return send_file(fp, as_attachment=True) if os.path.exists(fp) \
         else (f"Model '{fn}' not found.", 404)
 
-    # ─────────────────────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    USE_FIRESTORE = True
 
+if __name__ == "__main__":
     _load_tenants()   # Restore tenants from Firestore or local json on startup
     print("=" * 60)
     print("  FRACTAL  .  Multi-Tenant Federated Learning Server")

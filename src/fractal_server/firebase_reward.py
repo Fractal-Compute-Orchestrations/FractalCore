@@ -52,10 +52,14 @@ def _get_email_by_device_id(device_id: str) -> Optional[str]:
     # ── Step 1: Direct document ID lookup ────────────────────────────────────
     try:
         print(f"[Firebase] Looking up registered_devices document '{device_id}'...")
+        # `DocumentReference.get()` returns a sync `DocumentSnapshot` at runtime.
+        # Pylance's type stubs (async client overloads) report the return as
+        # `Awaitable[DocumentSnapshot]`, which is a false positive here, hence
+        # the targeted `type: ignore` on the `.exists` / `.to_dict()` accesses.
         doc = _db.collection("registered_devices").document(device_id).get()
 
-        if doc.exists:
-            data = doc.to_dict()
+        if doc.exists:  # type: ignore[attr-defined]
+            data = doc.to_dict()  # type: ignore[attr-defined]
             print("=" * 60)
             print(f"[Firebase] Found device by document ID '{device_id}'")
             print(json.dumps(data, indent=2, default=str))
