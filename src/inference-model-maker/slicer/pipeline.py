@@ -13,7 +13,7 @@ from slicer.workstations import step_1_ingestor, step_2_quantizer, step_3_tracer
 from slicer.validators import qa_1_ingestor, qa_2_quantizer, qa_3_tracer, qa_4_delegator, qa_5_exporter
 
 
-def run_factory_pipeline(model_path: str = "T:\\models\\Meta-Llama-3-8B", total_layers: int = 32, output_dir: str = "./output"):
+def run_factory_pipeline(model_path: str = "./assets/raw_models/Meta-Llama-3-8B", total_layers: int = 32, output_dir: str = "./output"):
     """
     Main Conveyor Belt Orchestrator loop.
     Acts exclusively as the factory floor manager, handing outputs of one workstation

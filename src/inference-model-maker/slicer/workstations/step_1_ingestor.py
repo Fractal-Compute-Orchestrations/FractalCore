@@ -35,7 +35,7 @@ import torch
 from transformers import AutoModelForCausalLM
 
 
-def load_model(model_path: str = "T:\\models\\Meta-Llama-3-8B") -> torch.nn.Module:
+def load_model(model_path: str = "./assets/raw_models/Meta-Llama-3-8B") -> torch.nn.Module:
     """Ingest the monolithic local model checkpoint onto the host CPU.
 
     Loads the full ``AutoModelForCausalLM`` in ``torch.float16`` with

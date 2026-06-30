@@ -14,6 +14,16 @@ import argparse
 import os
 import sys
 
+# Try loading environment variables from .env file
+try:
+    from pathlib import Path
+    from dotenv import load_dotenv
+    _ENV_FILE = Path(__file__).resolve().parent / ".env"
+    if _ENV_FILE.exists():
+        load_dotenv(_ENV_FILE)
+except ImportError:
+    pass
+
 # Ensure the parent directory is in the import search path
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
@@ -30,7 +40,7 @@ def main():
     parser.add_argument(
         "--model_path",
         type=str,
-        default="T:\\models\\Meta-Llama-3-8B",
+        default=os.getenv("RAW_MODEL_DIR", "./assets/raw_models/Meta-Llama-3-8B"),
         help="Local filesystem path to the model checkpoint folder (or Hugging Face ID if online)",
     )
     parser.add_argument(

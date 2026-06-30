@@ -18,6 +18,15 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import socket
+
+# Prevent infinite hangs on unstable connections by timing out sockets after 30 seconds.
+# This triggers huggingface_hub's native auto-retry mechanism.
+socket.setdefaulttimeout(30.0)
+
+# Force stdout and stderr to flush immediately so that progress bars update in real-time.
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 # Try loading env variables from .env file if dotenv is installed.
 # Resolve the .env path relative to the project root (two levels up from slicer/scripts/).
@@ -30,6 +39,10 @@ try:
         load_dotenv(_ENV_FILE)
 except ImportError:
     pass
+
+# Set Hugging Face Hub timeouts before importing huggingface_hub to prevent infinite hangs.
+os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "30")
+os.environ.setdefault("HF_HUB_ETAG_TIMEOUT", "30")
 
 try:
     from huggingface_hub import snapshot_download
@@ -99,7 +112,7 @@ def resolve_auth_token() -> str:
     )
 
 
-def download_model(model_id: str, output_path: str) -> None:
+def download_model(model_id: str, output_path: str, max_workers: int = 4) -> None:
     """Securely downloads the Hugging Face model to the target directory.
 
     Parameters
@@ -108,6 +121,8 @@ def download_model(model_id: str, output_path: str) -> None:
         The Hugging Face Repository ID.
     output_path : str
         Target local directory where files will be stored.
+    max_workers : int
+        Maximum number of parallel downloader threads.
     """
     token = resolve_auth_token()
     abs_output_path = os.path.abspath(output_path)
@@ -128,7 +143,7 @@ def download_model(model_id: str, output_path: str) -> None:
             local_dir=abs_output_path,
             ignore_patterns=IGNORE_PATTERNS,
             token=token,
-            max_workers=4,  # Parallel download streams
+            max_workers=max_workers,  # Parallel download streams
         )
 
         print("\n[PROVISIONER] -- Provisioning Completed Successfully --")
@@ -170,10 +185,19 @@ if __name__ == "__main__":
         default=DEFAULT_TARGET_DIR,
         help=f"Target output directory (default: {DEFAULT_TARGET_DIR})",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=2,
+        help="Maximum parallel download threads (use 1 for very unstable connections) (default: 2)",
+    )
 
     args = parser.parse_args()
     try:
-        download_model(model_id=args.model, output_path=args.output)
+        download_model(model_id=args.model, output_path=args.output, max_workers=args.workers)
+    except KeyboardInterrupt:
+        print("\n\n[PROVISIONER] [INFO] Download interrupted by user. Run the script again to resume.")
+        sys.exit(0)
     except RuntimeError as rerr:
         print(f"\n[PROVISIONER] [ERROR] {rerr}", file=sys.stderr)
         sys.exit(1)
