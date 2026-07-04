@@ -1,5 +1,5 @@
 import torch
-from torch.export import export, ExportedProgram
+from torch.export import export
 from slicer.contracts import QuantizeOutput, TraceOutput
 
 def export_to_aten(quantized_layer: QuantizeOutput) -> TraceOutput:

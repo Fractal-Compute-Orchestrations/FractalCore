@@ -23,9 +23,9 @@ db = firestore.client()
 TEST_ID = "fc5085107cf2f409"
 TEST_REWARD = 15.0
 
-print(f"\n==================================================")
+print("\n==================================================")
 print(f" TESTING REWARD LOGIC FOR DEVICE: {TEST_ID}")
-print(f"==================================================")
+print("==================================================")
 
 try:
     print("[1] Searching 'registered_devices' collection...")

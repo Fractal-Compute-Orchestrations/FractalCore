@@ -93,7 +93,7 @@ def _get_email_by_device_id(device_id: str) -> Optional[str]:
         print(f"[Firebase] WARNING: No device found for ID '{device_id}'.")
 
         # ── Step 3: Dynamic fallback to the first registered email in the DB ───
-        print(f"[Firebase] Fallback: Querying first available registered device in the database...")
+        print("[Firebase] Fallback: Querying first available registered device in the database...")
         default_docs = _db.collection("registered_devices").limit(1).stream()
         for doc in default_docs:
             data = doc.to_dict()

@@ -1,8 +1,7 @@
-import torch
 from slicer.contracts import IngestOutput, QuantizeOutput
 
 try:
-    import torchao
+    import torchao  # noqa: F401
     from torchao.quantization import Int4WeightOnlyConfig, quantize_
     HAS_TORCHAO = True
 except ImportError:

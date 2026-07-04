@@ -81,7 +81,7 @@ def main():
             output_dir=abs_output_dir,
         )
 
-        print(f"\n[OK] Run completed successfully.")
+        print("\n[OK] Run completed successfully.")
         print(f"Outputs written to: {abs_output_dir}")
         print("\nGenerated files:")
         if os.path.exists(abs_output_dir):

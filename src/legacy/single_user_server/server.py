@@ -1,26 +1,24 @@
-from flask import Flask, jsonify, send_file, request, render_template, redirect, url_for, session, send_from_directory
 import os
+import threading
+from collections import deque
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Optional
+
+import firebase_admin
+import numpy as np
+import tensorflow as tf
 from dotenv import load_dotenv
+from firebase_admin import credentials, firestore as fb_firestore
+from flask import Flask, jsonify, send_file, request, render_template, redirect, url_for, session
+from google.cloud.firestore_v1 import Increment
+from google.cloud.firestore_v1.base_query import FieldFilter
+from tensorflow import keras
 
 load_dotenv()
 
-import json
-
-import threading
-import tensorflow as tf
-import numpy as np
-from pathlib import Path
-from collections import deque
-from datetime import datetime, timedelta
-from tensorflow import keras
 fashion_mnist = keras.datasets.fashion_mnist
 to_categorical = keras.utils.to_categorical
-from typing import Optional # <-- Added for Python 3.8 Compatibility
-
-import firebase_admin
-from firebase_admin import credentials, firestore as fb_firestore
-from google.cloud.firestore_v1 import Increment
-from google.cloud.firestore_v1.base_query import FieldFilter # <-- THE WARNING FIX
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 SECRETS_DIR  = os.path.join(PROJECT_ROOT, "secrets")
@@ -280,7 +278,8 @@ def perform_federated_averaging():
         threading.Thread(target=_shutdown_server, daemon=True).start()
 
 def _shutdown_server():
-    import time, signal
+    import signal
+    import time
     time.sleep(1)
     os.kill(os.getpid(), signal.SIGINT)
 
@@ -673,7 +672,7 @@ if __name__ == "__main__":
 
     print("===================================================")
     print(" FRACTAL FEDERATED LEARNING SERVER")
-    print(f" Dashboard  ->  http://127.0.0.1:5000/")
+    print(" Dashboard  ->  http://127.0.0.1:5000/")
     print(f" MODEL_ID:                   {CONFIG['MODEL_ID']}")
     print(f" DATA_ID:                    {CONFIG['DATA_ID']}")
     print(f" MAX CLIENTS PER ROUND:      {CONFIG['MAX_CLIENTS']}")

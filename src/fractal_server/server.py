@@ -1,26 +1,27 @@
+import json
+import os
+import secrets
+import shutil
+import threading
+from collections import deque
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Optional
+
+import numpy as np
+import tensorflow as tf
+from dotenv import load_dotenv
 from flask import (Flask, jsonify, send_file, request,
                    render_template, redirect, url_for)
-import os, json, secrets, threading, shutil
-from dotenv import load_dotenv
+from tensorflow import keras
 
 load_dotenv()
 
-import tensorflow as tf
+from firebase_reward import _db  # noqa: E402
+from firebase_reward import credit_mbs_for_device  # noqa: E402
 
-import numpy as np
-from pathlib import Path
-from collections import deque
-from datetime import datetime, timedelta
-
-from tensorflow import keras
 fashion_mnist = keras.datasets.fashion_mnist
 to_categorical = keras.utils.to_categorical
-from typing import Optional
-from firebase_reward import credit_mbs_for_device
-
-
-import firebase_admin
-from firebase_admin import credentials
 
 BASE_DIR              = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT          = os.path.dirname(os.path.dirname(BASE_DIR))
@@ -28,9 +29,6 @@ DATA_DIR              = os.path.join(PROJECT_ROOT, "data")
 SECRETS_DIR           = os.path.join(PROJECT_ROOT, "secrets")
 TENANTS_JSON          = os.path.join(SECRETS_DIR, "tenants.json")
 USE_FIRESTORE         = True
-
-# ── Firebase ──────────────────────────────────────────────────────────────────
-from firebase_reward import _db
 
 # ── Flask ─────────────────────────────────────────────────────────────────────
 app = Flask(__name__)
@@ -385,7 +383,8 @@ class TenantSession:
         files = [os.path.join(self.upload_dir, f)
                  for f in os.listdir(self.upload_dir) if f.endswith(".ckpt")]
         if not files:
-            self.add_log("No checkpoints found.", "warn"); return
+            self.add_log("No checkpoints found.", "warn")
+            return
         reader = tf.train.load_checkpoint(files[0])
         keys   = list(reader.get_variable_to_shape_map().keys())
         acc    = {k: None for k in keys}
@@ -401,7 +400,8 @@ class TenantSession:
             except Exception as e:
                 self.add_log(f"Error: {os.path.basename(ckpt)}: {e}", "error")
         if n_ok == 0:
-            self.add_log("ABORT: No valid checkpoints.", "error"); return
+            self.add_log("ABORT: No valid checkpoints.", "error")
+            return
         # n_ok > 0 guarantees every acc[k] was assigned in the loop above,
         # but Pylance can't infer that. Use explicit narrowing so the
         # `None`/`int` operator error disappears without losing type safety.
@@ -539,7 +539,8 @@ def _get_next_tenant_rr():
             idx = (_rr_index + 1 + i) % len(keys)
             u   = keys[idx]
             t   = snap.get(u)
-            if not t: continue
+            if not t:
+                continue
             s: TenantSession = t["session"]
             if (t["active"] and s.state.get("running")
                     and not s.state.get("paused")
@@ -559,14 +560,16 @@ def admin_required(f):
         if _get_auth().get("role") != "admin":
             return redirect(url_for("login"))
         return f(*a, **kw)
-    w.__name__ = f.__name__; return w
+    w.__name__ = f.__name__
+    return w
 
 def tenant_required(f):
     def w(*a, **kw):
         if _get_auth().get("role") != "tenant":
             return redirect(url_for("login"))
         return f(*a, **kw)
-    w.__name__ = f.__name__; return w
+    w.__name__ = f.__name__
+    return w
 
 def _cur_tenant() -> str:
     return _get_auth().get("user", "")
@@ -692,7 +695,8 @@ def api_create_tenant():
 def api_toggle_tenant(username):
     with _tenants_lock:
         t = _tenants.get(username)
-        if not t: return jsonify({"error": "Not found."}), 404
+        if not t:
+            return jsonify({"error": "Not found."}), 404
         t["active"] = not t["active"]
         active = t["active"]
     _save_tenants()
@@ -705,7 +709,8 @@ def api_update_tenant(username):
     d = request.get_json(force=True, silent=True) or {}
     with _tenants_lock:
         t = _tenants.get(username)
-        if not t: return jsonify({"error": "Not found."}), 404
+        if not t:
+            return jsonify({"error": "Not found."}), 404
         if "max_tflops" in d:
             t["max_tflops"] = float(d["max_tflops"])
         if "total_device_mbs" in d:
@@ -755,7 +760,8 @@ def api_delete_tenant(username):
 def api_admin_tenant_status(username):
     with _tenants_lock:
         t = _tenants.get(username)
-    if not t: return jsonify({"error": "Not found."}), 404
+    if not t:
+        return jsonify({"error": "Not found."}), 404
     st = t["session"].get_status()
     st["max_tflops"]       = t["max_tflops"]
     st["total_device_mbs"] = t["total_device_mbs"]
@@ -777,7 +783,8 @@ def tenant_dashboard():
 def api_tenant_status():
     u = _cur_tenant()
     t = _tenants.get(u)
-    if not t: return jsonify({"error": "Not found."}), 404
+    if not t:
+        return jsonify({"error": "Not found."}), 404
     st = t["session"].get_status()
     st["max_tflops"]       = t["max_tflops"]
     st["total_device_mbs"] = t["total_device_mbs"]
@@ -790,20 +797,24 @@ def api_tenant_status():
 def api_tenant_config():
     u = _cur_tenant()
     t = _tenants.get(u)
-    if not t: return jsonify({"error": "Not found."}), 404
+    if not t:
+        return jsonify({"error": "Not found."}), 404
     s: TenantSession = t["session"]
     payload  = request.get_json(force=True, silent=True) or {}
     proposed = dict(s.config)
 
     for k in ["MAX_CLIENTS","MAX_ROUNDS","N_BINS","ITEMS_PER_BIN",
               "NUM_EPOCHS","BATCH_SIZE","NUM_CLASSES"]:
-        if k in payload: proposed[k] = int(payload[k])
+        if k in payload:
+            proposed[k] = int(payload[k])
     if "IMG_SIZE" in payload:
         proposed["INPUT_SHAPE"] = [int(payload["IMG_SIZE"])] * 2
     for k in ["REPETITIVE_TRAINING", "AUTO_DELETE_CHECKPOINTS"]:
-        if k in payload: proposed[k] = bool(payload[k])
+        if k in payload:
+            proposed[k] = bool(payload[k])
     for k in ["DATASET","ARCHITECTURE"]:
-        if k in payload: proposed[k] = str(payload[k])
+        if k in payload:
+            proposed[k] = str(payload[k])
 
     # Reward always derived from admin's total_device_mbs / MAX_CLIENTS
     proposed["CHECKPOINT_REWARD_RATE"] = _calc_reward(
@@ -832,10 +843,13 @@ def api_tenant_config():
 def api_tenant_start():
     u = _cur_tenant()
     t = _tenants.get(u)
-    if not t: return jsonify({"error": "Not found."}), 404
-    if not t["active"]: return jsonify({"error": "Account inactive."}), 403
+    if not t:
+        return jsonify({"error": "Not found."}), 404
+    if not t["active"]:
+        return jsonify({"error": "Account inactive."}), 403
     s: TenantSession = t["session"]
-    if s.state.get("restarting"): return jsonify({"error": "Already starting."}), 409
+    if s.state.get("restarting"):
+        return jsonify({"error": "Already starting."}), 409
     s.start(t["max_tflops"])
     return jsonify({"status": "Starting..."})
 
@@ -845,7 +859,8 @@ def api_tenant_start():
 def api_tenant_pause():
     u = _cur_tenant()
     t = _tenants.get(u)
-    if not t: return jsonify({"error": "Not found."}), 404
+    if not t:
+        return jsonify({"error": "Not found."}), 404
     s: TenantSession = t["session"]
     s.state["paused"] = not s.state["paused"]
     s.add_log(f"Session {'paused' if s.state['paused'] else 'resumed'} by tenant.", "warn")
@@ -881,7 +896,8 @@ def get_current_task():
                 s.add_log("Queue empty — refilling circularly.", "info")
                 s._build_task_queue()
             else:
-                with s._tflops_lock: s.remaining_tflops += cost
+                with s._tflops_lock:
+                    s.remaining_tflops += cost
                 return jsonify({"error": "No tasks available."}), 404
         task = s.task_queue.popleft()
 
@@ -929,16 +945,20 @@ def upload_checkpoint():
                         tenant_id = username
                         break
 
-    if not tenant_id: return "Unknown task_Id.", 400
+    if not tenant_id:
+        return "Unknown task_Id.", 400
 
     with _tenants_lock:
         t = _tenants.get(tenant_id)
-    if not t: return "Tenant not found.", 404
+    if not t:
+        return "Tenant not found.", 404
     s: TenantSession = t["session"]
 
-    if "model_file" not in request.files: return "No file.", 400
+    if "model_file" not in request.files:
+        return "No file.", 400
     f = request.files["model_file"]
-    if f.filename == "": return "No file selected.", 400
+    if f.filename == "":
+        return "No file selected.", 400
 
     with s._task_device_map_lock:
         di = s._task_device_map.pop(task_Id, None)
@@ -966,14 +986,17 @@ def upload_checkpoint():
         s.add_log("All clients reported — triggering Federated Averaging.", "info")
         def _agg():
             s.do_federated_averaging()
-            import time; time.sleep(2)
+            import time
+            time.sleep(2)
             s.assigned_devices.clear()
             s.state.update({"clients_uploaded": 0, "segments_dispatched": 0,
                             "aggregation_done": False})
             if s.config.get("AUTO_DELETE_CHECKPOINTS", False):
                 for x in [x for x in os.listdir(s.upload_dir) if x.endswith(".ckpt")]:
-                    try: os.remove(os.path.join(s.upload_dir, x))
-                    except OSError: pass
+                    try:
+                        os.remove(os.path.join(s.upload_dir, x))
+                    except OSError:
+                        pass
             else:
                 s.add_log("Auto-delete disabled: keeping round client checkpoints in uploads folder.", "info")
             if not s.state["finished"]:
@@ -1078,6 +1101,6 @@ if __name__ == "__main__":
     print("  Tenant -> http://127.0.0.1:5000/tenant")
     print(f"  Persistence: {'Firebase Firestore' if USE_FIRESTORE else 'Local JSON (secrets/tenants.json)'}")
     print(f"  Shared model: {SHARED_MODEL_FILENAME}")
-    print(f"  Auth: per-login token in sessionStorage (tab-isolated)")
+    print("  Auth: per-login token in sessionStorage (tab-isolated)")
     print("=" * 60)
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)

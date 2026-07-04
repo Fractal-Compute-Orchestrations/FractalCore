@@ -130,7 +130,7 @@ def download_model(model_id: str, output_path: str, max_workers: int = 4) -> Non
     print("[PROVISIONER] -- Initializing Secure Monolithic Asset Provisioning --")
     print(f"[PROVISIONER] Repository ID:   {model_id}")
     print(f"[PROVISIONER] Local target:    {abs_output_path}")
-    print(f"[PROVISIONER] Dtype Focus:     Safetensors (.safetensors)")
+    print("[PROVISIONER] Dtype Focus:     Safetensors (.safetensors)")
     print(f"[PROVISIONER] Ignoring:        {', '.join(IGNORE_PATTERNS)}")
     print("[PROVISIONER] ------------------------------------------------------------\n")
 
@@ -147,7 +147,7 @@ def download_model(model_id: str, output_path: str, max_workers: int = 4) -> Non
         )
 
         print("\n[PROVISIONER] -- Provisioning Completed Successfully --")
-        print(f"[PROVISIONER] [OK] Monolithic asset cached at absolute path:")
+        print("[PROVISIONER] [OK] Monolithic asset cached at absolute path:")
         print(f"              {downloaded_path}")
 
     except GatedRepoError:
