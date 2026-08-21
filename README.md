@@ -5,12 +5,13 @@
 
 [![Version](https://img.shields.io/badge/version-1.0.0-6E44FF.svg?style=flat-square)](https://semver.org)
 [![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg?style=flat-square)](LICENSE)
+[![Design](https://img.shields.io/badge/Design_Case_Study-Behance-0057ff.svg?logo=behance&style=flat-square)](https://www.behance.net/gallery/221459335/Fractal)
 [![Security](https://img.shields.io/badge/security-hardened-success.svg?style=flat-square)](SECURITY.md)
 [![Maintainer](https://img.shields.io/badge/maintained_by-Ahmad_Hassan_(B--Ted)-red.svg?style=flat-square)](https://github.com/Fractal-Compute-Orchestrations)
 
 **FractalCore is the central server, control plane, and model compilation engine for the Fractal decentralized compute ecosystem.**
 
-[Overview](#overview) | [Architecture](#system-architecture) | [Core Components](#core-components) | [Data Flow](#data-flow-and-lifecycle) | [API Summary](#api-reference-summary) | [Deployment](#deployment-and-execution) | [Security](#security-model)
+[Overview](#overview) | [Design Case Study](https://www.behance.net/gallery/221459335/Fractal) | [Architecture](#system-architecture) | [Core Components](#core-components) | [Data Flow](#data-flow-and-lifecycle) | [API Summary](#api-reference-summary) | [Deployment](#deployment-and-execution) | [Security](#security-model)
 
 ---
 </div>
