@@ -12,8 +12,7 @@ load_dotenv()
 # 1. Setup
 
 _SERVICE_ACCOUNT_PATH = os.getenv(
-    "FIREBASE_SERVICE_ACCOUNT_PATH",
-    "firebase_service_account.json"
+    "FIREBASE_SERVICE_ACCOUNT_PATH", "firebase_service_account.json"
 )
 cred = credentials.Certificate(_SERVICE_ACCOUNT_PATH)
 firebase_admin.initialize_app(cred)
@@ -22,15 +21,15 @@ db = firestore.client()
 
 def reset_global_users():
     """
-    Checks all registered devices, identifies which ones are currently 
+    Checks all registered devices, identifies which ones are currently
     in their midnight hour, and resets their linked user accounts.
     """
     print(f"[*] Starting Global Hourly Sweep: {datetime.now(pytz.utc)} UTC")
-    
+
     # Map to keep track of who we've already reset this hour (to avoid double-writes)
     processed_emails = set()
     reset_count = 0
-    
+
     # 1. Get all devices that have a timezone set
     # Note: In a massive production app, you'd index this or use a Cloud Function.
     devices_ref = db.collection("registered_devices").stream()
@@ -51,9 +50,9 @@ def reset_global_users():
             user_now = datetime.now(user_tz)
 
             if user_now.hour == 0:
-                # This user is in their midnight window! 
+                # This user is in their midnight window!
                 user_ref = db.collection("users").document(user_email)
-                
+
                 # We only reset if they actually have a balance
                 user_doc = user_ref.get()
                 if user_doc.exists and user_doc.to_dict().get("liquid_mbs", 0) > 0:
@@ -71,11 +70,14 @@ def reset_global_users():
     if reset_count % 500 != 0 and reset_count > 0:
         batch.commit()
 
-    print(f"[+] Sweep Complete. {reset_count} accounts cleared for their local midnight.")
+    print(
+        f"[+] Sweep Complete. {reset_count} accounts cleared for their local midnight."
+    )
+
 
 def main():
     print("[*] Global Midnight Sweeper Active (Production Mode)")
-    
+
     while True:
         # Run the reset logic
         try:
@@ -87,9 +89,10 @@ def main():
         # This is more efficient than sleeping 60 seconds
         now = datetime.now()
         seconds_until_next_hour = 3600 - (now.minute * 60 + now.second)
-        
+
         print(f"[*] Next sweep in {round(seconds_until_next_hour / 60, 1)} minutes...")
-        time.sleep(seconds_until_next_hour + 5) # +5s to ensure we cross the hour mark
+        time.sleep(seconds_until_next_hour + 5)  # +5s to ensure we cross the hour mark
+
 
 if __name__ == "__main__":
     main()

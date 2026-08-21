@@ -2,19 +2,28 @@
 
 ## Supported Versions
 
-Only the latest version of FractalCore is currently supported for security updates.
+The following table summarizes the support status for FractalCore releases:
 
-| Version | Supported          |
-| ------- | ------------------ |
-| v1.0.x  | :white_check_mark: |
-| < v1.0  | :x:                |
+| Version | Supported |
+| :--- | :--- |
+| v1.0.x | Yes |
+| < v1.0 | No |
+
+---
 
 ## Reporting a Vulnerability
 
-We take the security of FractalCore seriously. If you believe you have found a security vulnerability, please report it to us as follows:
+Security is a fundamental priority for FractalCore. If you discover a potential security vulnerability, please follow the coordinated disclosure process:
 
-1.  **Do not open a public issue.**
-2.  Send an email to security@fractalcompute.io (Note: Placeholder email) with the details of the vulnerability.
-3.  Include a description of the vulnerability, steps to reproduce it, and any potential impact.
+1. **Do not disclose the issue publicly** via GitHub Issues, Discussions, or pull requests.
+2. Send a confidential report to `security@fractalcompute.io` with full technical details.
+3. Include the following in your disclosure:
+   - Vulnerability class (e.g. authentication bypass, privilege escalation, path traversal).
+   - Exact affected file paths, endpoints, and line numbers.
+   - Step-by-step reproduction instructions and proof-of-concept payload if available.
+   - Assessed impact on multi-tenant isolation or node telemetry security.
 
-We will acknowledge receipt of your report within 48 hours and provide a timeline for a fix. We ask that you do not disclose the vulnerability publicly until we have had a chance to address it.
+### Response Timeline
+- **Initial Acknowledgment**: Within 48 hours of receipt.
+- **Triage and Impact Assessment**: Within 7 business days.
+- **Patch Release & Security Advisory**: Coordinated upon validation and regression testing.

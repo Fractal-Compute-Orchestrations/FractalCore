@@ -2,20 +2,26 @@ import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 # === 1. Rebuild model ===
 def build_model():
     # Same architecture as used during training
-    return tf.keras.Sequential([
-        tf.keras.layers.Flatten(input_shape=(28, 28)),  # adjust if needed
-        tf.keras.layers.Dense(128, activation='relu'),
-        tf.keras.layers.Dense(10, activation='softmax')
-    ])
+    return tf.keras.Sequential(
+        [
+            tf.keras.layers.Flatten(input_shape=(28, 28)),  # adjust if needed
+            tf.keras.layers.Dense(128, activation="relu"),
+            tf.keras.layers.Dense(10, activation="softmax"),
+        ]
+    )
+
 
 model = build_model()
 
 # === 2. Restore from checkpoint ===
 ckpt = tf.train.Checkpoint(model=model)
-ckpt.restore('./global_model/global.ckpt').expect_partial()  # or use .assert_existing_objects_matched()
+ckpt.restore(
+    "./global_model/global.ckpt"
+).expect_partial()  # or use .assert_existing_objects_matched()
 
 # === 3. Run inference ===
 fashion_mnist = tf.keras.datasets.fashion_mnist
@@ -36,20 +42,32 @@ predictions = np.argmax(pred_probs, axis=1)
 true_labels = np.argmax(test_labels, axis=1)  # If test_labels is one-hot
 
 # === 4. Plot results ===
-class_names = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat',
-               'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
+class_names = [
+    "T-shirt/top",
+    "Trouser",
+    "Pullover",
+    "Dress",
+    "Coat",
+    "Sandal",
+    "Shirt",
+    "Sneaker",
+    "Bag",
+    "Ankle boot",
+]
+
 
 def plot(images, predictions, true_labels):
-    plt.figure(figsize=(10,10))
+    plt.figure(figsize=(10, 10))
     for i in range(25):
-        plt.subplot(5,5,i+1)
+        plt.subplot(5, 5, i + 1)
         plt.xticks([])
         plt.yticks([])
         plt.grid(False)
         plt.imshow(images[i], cmap=plt.cm.binary)
-        color = 'b' if predictions[i] == true_labels[i] else 'r'
+        color = "b" if predictions[i] == true_labels[i] else "r"
         plt.xlabel(class_names[predictions[i]], color=color)
     plt.show()
+
 
 plot(test_images, predictions, true_labels)
 

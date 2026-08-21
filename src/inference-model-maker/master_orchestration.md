@@ -1,75 +1,65 @@
-# FRACTAL MASTER ORCHESTRATION PIPELINE
+# Fractal Master Orchestration Pipeline Specification
 
-**Architecture Philosophy:** Contract-Driven Manufacturing Pipeline
-**Target Execution:** Llama 3 (8B) across Android Master-Worker Mesh
+**Architecture Philosophy**: Contract-Driven Manufacturing Pipeline  
+**Target Execution**: Distributed Foundation Model Inference across Android Mesh  
 
-## 1. The Factory Analogy (System Overview)
+---
 
-Project Fractal operates as an automated manufacturing pipeline.
+## 1. System Overview
 
-- **The Raw Material:** A monolithic 16GB LLM.
-- **The Workstations (Modules):** Isolated software environments (Python off-device, Kotlin on-device) that perform exactly one transformation.
-- **The Conveyor Belt (Contracts):** Strict input/output data shapes. A module knows absolutely nothing about the internal logic of the module before it. It only knows what data shape it requires to start working.
-- **Quality Assurance (Validators):** Automated programmatic checks that run immediately after a module completes its task. If a validator fails, the conveyor belt stops, and an exception is thrown.
+The Fractal orchestration system operates as an automated distributed manufacturing pipeline:
+
+- **Raw Material**: Monolithic Foundation Model checkpoint (FP16/BF16).
+- **Workstations (Modules)**: Isolated environments (Python server-side compiler, Kotlin on-device runtime) that perform singular deterministic transformations.
+- **Conveyor Belt (Contracts)**: Strict input/output data shapes and memory constraints.
+- **Quality Assurance (Validators)**: Programmatic validation assertions executed at stage boundaries. If a validator fails, compilation halts and an exception is raised.
 
 ---
 
 ## 2. Global System Contracts
 
-### 2.1 The Weight Contract (Static Asset)
+### 2.1 The Weight Contract (Static Storage Asset)
+- **Definition**: The serialized binary representation of a single neural network layer.
+- **Format**: FlatBuffer binary (`.pte` or `.tflite`).
+- **Size Constraint**: Strictly $\le 150\text{MB}$.
 
-- **Definition:** The physical representation of a single neural network layer.
-- **Shape Constraint:** A binary file (e.g., `.pte` or `.tflite`).
-- **Size Constraint:** Strictly ≤ 150MB.
-
-### 2.2 The Activation Contract (Dynamic Payload)
-
-- **Definition:** The hidden state tensor moving between Android devices.
-- **Shape Constraint:** A 1-dimensional byte array representing 4,096 elements + 1 Float (Scale).
-- **Size Constraint:** Strictly 4,100 bytes.
+### 2.2 The Activation Contract (Dynamic Network Payload)
+- **Definition**: The hidden state activation tensor moving between Android mesh nodes.
+- **Format**: 1-dimensional byte array representing 4,096 elements + 1 Float32 scale.
+- **Size Constraint**: Strictly 4,100 bytes.
 
 ---
 
-## 3. The Pipeline Stages (Module Specifications)
+## 3. Pipeline Module Specifications
 
-### MODULE 1: The Slicer (Off-Device Graph Surgery)
+### Module 1: The Slicer (Server-Side Graph Surgery)
+- **Role**: Ingests monolithic models, splits them into atomic layer chunks, applies INT4 weight quantization, and packages them for mobile execution.
+- **Input Contract**: Hugging Face FP16/BF16 Model Checkpoint.
+- **Output Contract**: Sequential `layer_[N].pte` binary files.
+- **Validator (`SlicerQA`)**:
+  - Validates all output files match extension `.pte`.
+  - Asserts every file satisfies $\text{size} \le 150\text{MB}$.
 
-- **Role:** Acts as the intake factory. Ingests the monolithic 16GB model, chops it into 32 atomic layer chunks, applies INT4 weight quantization, and packages them for mobile execution.
-- **Input Contract:** Hugging Face `LlamaForCausalLM` FP16 Checkpoint.
-- **Output Contract:** 32 individual `layer_[N].pte` binary files.
-- **The Validator (`SlicerQA`):**
-  - Iterates through all 32 output files.
-  - Asserts `file.extension == ".pte"`.
-  - Asserts `file.size <= 150MB`.
-  - _Halt Condition:_ If any file exceeds 150MB, the export is rejected.
+### Module 2: The Loader (On-Device Memory Mapping)
+- **Role**: Running on the Android client, ingests binary files and maps them to virtual memory without triggering the Android Low Memory Killer (LMK).
+- **Input Contract**: `layer_[N].pte` file residing on local Android filesystem.
+- **Output Contract**: Initialized ExecuTorch module mapped into process virtual memory via `mmap`.
+- **Validator (`LoaderQA`)**:
+  - Samples `Debug.MemoryInfo()`.
+  - Asserts physical Resident Set Size (RSS) spike is $\le 50\text{MB}$.
 
-### MODULE 2: The Loader (On-Device Memory Mapping)
-
-- **Role:** Acts as the receiving dock on the Android phone. Ingests the 150MB binary file and maps it to virtual memory without triggering the Android Low Memory Killer (LMK).
-- **Input Contract:** `layer_[N].pte` file residing on local Android storage.
-- **Output Contract:** An initialized `ExecuTorch.Module` mapped to virtual memory.
-- **The Validator (`LoaderQA`):**
-  - Samples Android OS `Debug.MemoryInfo()`.
-  - Asserts `Resident Set Size (RSS) spike <= 50MB`.
-  - _Halt Condition:_ If physical RAM spikes indicating a heap allocation instead of a virtual map, the app safely terminates the process to prevent an OS-level crash.
-
-### MODULE 3: The Engine (On-Device Execution)
-
-- **Role:** Acts as the computational press. Ingests an incoming network payload, dequantizes it, executes the XNNPACK forward pass, quantizes the result, and prepares it for the network socket.
-- **Input Contract:** `ByteArray` [4096 elements] + `Float` [1 element].
-- **Output Contract:** `ByteArray` [4096 elements] + `Float` [1 element].
-- **The Validator (`EngineQA`):**
-  - Asserts `InputArray.size == 4096`.
-  - Asserts `OutputArray.size == 4096`.
-  - Asserts `OutputArray` does not contain `NaN` or `Infinity` values.
-  - _Halt Condition:_ If array sizes mismatch or math corruption occurs, the pipeline requests a retry from the Master Server instead of passing corrupted data to the next phone.
+### Module 3: The Engine (On-Device Inference Execution)
+- **Role**: Receives an incoming network activation payload, dequantizes it, executes the XNNPACK forward pass, quantizes the output tensor, and dispatches it to the next node in the mesh.
+- **Input Contract**: Byte array [4,096 elements] + Float32 scale.
+- **Output Contract**: Byte array [4,096 elements] + Float32 scale.
+- **Validator (`EngineQA`)**:
+  - Asserts input and output buffer lengths equal 4,096.
+  - Asserts output values do not contain NaN or Infinity.
 
 ---
 
-## 4. Agent Directives (Instructions for AI Implementation)
+## 4. Engineering Directives for Implementation
 
-If you are an AI agent tasked with writing code for this repository, you must adhere to the following rules:
-
-1. **Isolation:** Do not merge Modules. Module 2 (Kotlin Loader) must not contain the logic for Module 3 (Kotlin Engine). They must be separate classes communicating via interfaces.
-2. **Validator-First Coding:** When writing a module, write the Validator (the unit test / runtime check) _before_ writing the execution logic.
-3. **No Black Boxes:** Every module must implement a `verify()` method that executes its respective QA Validator before passing its Output Contract to the next stage.
+1. **Subsystem Isolation**: Do not couple compilation logic with on-device runtime logic. The Server Slicer (Python) and Android Client (Kotlin) communicate strictly via file and network contracts.
+2. **Validator-First Implementation**: When writing a pipeline workstation or execution engine, write the validator assertion test before implementing transformation logic.
+3. **Deterministic Contracts**: Every workstation must expose a `verify()` method validating preconditions and postconditions.

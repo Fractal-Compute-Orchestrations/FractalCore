@@ -12,9 +12,9 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from typing import Optional
 
 # ── Secrets Path Configuration ────────────────────────────────────────────────
-BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(BASE_DIR))
-SECRETS_DIR  = os.path.join(PROJECT_ROOT, "secrets")
+SECRETS_DIR = os.path.join(PROJECT_ROOT, "secrets")
 _SERVICE_ACCOUNT_PATH = os.path.join(SECRETS_DIR, "firebase", "service-account.json")
 
 # ── Firebase Initialization ───────────────────────────────────────────────────
@@ -33,6 +33,7 @@ else:
 
 
 # ── Internal Helpers ──────────────────────────────────────────────────────────
+
 
 def _get_email_by_device_id(device_id: str) -> Optional[str]:
     """
@@ -77,9 +78,9 @@ def _get_email_by_device_id(device_id: str) -> Optional[str]:
         )
         results = (
             _db.collection("registered_devices")
-               .where(filter=FieldFilter("hardwareId", "==", device_id))
-               .limit(1)
-               .stream()
+            .where(filter=FieldFilter("hardwareId", "==", device_id))
+            .limit(1)
+            .stream()
         )
 
         for doc in results:
@@ -93,13 +94,17 @@ def _get_email_by_device_id(device_id: str) -> Optional[str]:
         print(f"[Firebase] WARNING: No device found for ID '{device_id}'.")
 
         # ── Step 3: Dynamic fallback to the first registered email in the DB ───
-        print("[Firebase] Fallback: Querying first available registered device in the database...")
+        print(
+            "[Firebase] Fallback: Querying first available registered device in the database..."
+        )
         default_docs = _db.collection("registered_devices").limit(1).stream()
         for doc in default_docs:
             data = doc.to_dict()
             fallback_email = data.get("email")
             if fallback_email:
-                print(f"[Firebase] Fallback SUCCESS: Matched unregistered ID '{device_id}' to registered database email '{fallback_email}'.")
+                print(
+                    f"[Firebase] Fallback SUCCESS: Matched unregistered ID '{device_id}' to registered database email '{fallback_email}'."
+                )
                 return fallback_email
 
     except Exception as e:
@@ -109,6 +114,7 @@ def _get_email_by_device_id(device_id: str) -> Optional[str]:
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
 
 def credit_mbs_for_device(device_id: str, mbs: float, session=None) -> bool:
     """
@@ -161,8 +167,8 @@ def credit_mbs_for_device(device_id: str, mbs: float, session=None) -> bool:
 
     # ── Read current user balance ─────────────────────────────────────────────
     try:
-        user_ref  = _db.collection("users").document(email)
-        user_doc  = user_ref.get()
+        user_ref = _db.collection("users").document(email)
+        user_doc = user_ref.get()
         user_data = user_doc.to_dict() if user_doc.exists else {}
 
         print("=" * 60)
@@ -182,7 +188,7 @@ def credit_mbs_for_device(device_id: str, mbs: float, session=None) -> bool:
             return True  # Not an error; the user is simply full
 
         # ── Compute creditable amount ─────────────────────────────────────────
-        to_add  = min(mbs, MAX_CAP_MB - current_mbs)
+        to_add = min(mbs, MAX_CAP_MB - current_mbs)
         new_bal = current_mbs + to_add
 
         # ── Atomic increment ──────────────────────────────────────────────────
@@ -212,7 +218,7 @@ if __name__ == "__main__":
         print("Example: python firebase_reward.py 7b06c36114aebc82 150.0")
         sys.exit(1)
 
-    dev_id  = sys.argv[1]
+    dev_id = sys.argv[1]
     mbs_arg = float(sys.argv[2]) if len(sys.argv) > 2 else 150.0
 
     print(f"[*] Device ID : {dev_id}")

@@ -3,9 +3,4 @@ from . import contracts
 from . import workstations
 from . import validators
 
-__all__ = [
-    'run_factory_pipeline',
-    'contracts',
-    'workstations',
-    'validators'
-]
+__all__ = ["run_factory_pipeline", "contracts", "workstations", "validators"]

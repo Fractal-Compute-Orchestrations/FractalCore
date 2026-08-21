@@ -1,65 +1,61 @@
 # Contributing to FractalCore
 
-First off, thank you for considering contributing to FractalCore! It's people like you that make FractalCore such a great tool.
+Thank you for contributing to FractalCore. This document outlines coding standards, development workflows, and pull request procedures.
+
+---
 
 ## Code of Conduct
 
-This project and everyone participating in it is governed by the [FractalCore Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
+All contributors are expected to adhere to the [FractalCore Code of Conduct](CODE_OF_CONDUCT.md).
 
-## How Can I Contribute?
+---
 
-### Reporting Bugs
+## Development Workflow
 
-Before creating bug reports, please check the existing issues as it might be a known problem. When you are creating a bug report, please include as many details as possible:
-
-* **Use a clear and descriptive title** for the issue to identify the problem.
-* **Describe the exact steps which reproduce the problem** in as many details as possible.
-* **Provide specific examples to demonstrate the steps**.
-* **Describe the behavior you observed after following the steps** and point out what exactly is the problem with that behavior.
-* **Explain which behavior you expected to see instead and why.**
-
-### Suggesting Enhancements
-
-Enhancement suggestions are tracked as GitHub issues. When creating an enhancement suggestion, please include:
-
-* **Use a clear and descriptive title** for the issue to identify the suggestion.
-* **Provide a step-by-step description of the suggested enhancement** in as many details as possible.
-* **Explain why this enhancement would be useful** to most FractalCore users.
-
-### Pull Requests
-
-* Fill in [the pull request template](.github/PULL_REQUEST_TEMPLATE.md).
-* Follow the Python style guide (PEP 8).
-* Ensure the CI tests pass.
-* Include tests for any new features or bug fixes.
-* Document any changes to the API or configuration.
-
-## Styleguides
-
-### Python Styleguide
-
-All Python code should be formatted with `black` and linted with `flake8`.
+### 1. Environment Setup
 
 ```bash
-# Format code
-black .
+# 1. Clone your fork
+git clone https://github.com/your-username/FractalCore.git
+cd FractalCore
 
-# Lint code
-flake8 .
+# 2. Initialize virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# 3. Install development and test dependencies
+pip install -r requirements.txt
+pip install pytest black flake8
 ```
 
-### Git Commit Messages
+### 2. Code Quality and Formatting Standards
 
-* Use the present tense ("Add feature" not "Added feature")
-* Use the imperative mood ("Move cursor to..." not "Moves cursor to...")
-* Limit the first line to 72 characters or less
-* Reference issues and pull requests liberally after the first line
+FractalCore enforces strict automated linting and formatting standards. Before opening a pull request, all checks must pass locally:
 
-## Development Setup
+- **Formatting (Black)**: Code must be formatted with `black`:
+  ```bash
+  black .
+  black --check .
+  ```
+- **Linting (Flake8)**: Code must pass syntax and complexity checks:
+  ```bash
+  flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+  flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+  ```
+- **Documentation Standard**: All markdown files must be technical, precise, and completely free of emojis.
 
-1. Fork the repository.
-2. Clone your fork: `git clone https://github.com/your-username/FractalCore.git`
-3. Create a virtual environment: `python -m venv venv`
-4. Activate it: `source venv/bin/activate` (or `venv\Scripts\activate` on Windows)
-5. Install dependencies: `pip install -r requirements.txt`
-6. Run the server: `python src/fractal_server/server.py`
+### 3. Running Unit Tests
+
+```bash
+pytest tests/
+```
+
+---
+
+## Pull Request Guidelines
+
+1. Create a feature branch from `main`: `git checkout -b feature/your-feature-name`.
+2. Maintain PEP 8 style conventions and add type annotations where applicable.
+3. Include unit or integration tests for new features and bug fixes.
+4. Ensure all CI checks pass.
+5. Write concise, imperative commit messages (`feat: add asynchronous FedAvg queue`).

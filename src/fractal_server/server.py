@@ -11,8 +11,7 @@ from typing import Optional
 import numpy as np
 import tensorflow as tf
 from dotenv import load_dotenv
-from flask import (Flask, jsonify, send_file, request,
-                   render_template, redirect, url_for)
+from flask import Flask, jsonify, send_file, request, render_template, redirect, url_for
 from tensorflow import keras
 
 load_dotenv()
@@ -23,12 +22,12 @@ from firebase_reward import credit_mbs_for_device  # noqa: E402
 fashion_mnist = keras.datasets.fashion_mnist
 to_categorical = keras.utils.to_categorical
 
-BASE_DIR              = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT          = os.path.dirname(os.path.dirname(BASE_DIR))
-DATA_DIR              = os.path.join(PROJECT_ROOT, "data")
-SECRETS_DIR           = os.path.join(PROJECT_ROOT, "secrets")
-TENANTS_JSON          = os.path.join(SECRETS_DIR, "tenants.json")
-USE_FIRESTORE         = True
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(BASE_DIR))
+DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+SECRETS_DIR = os.path.join(PROJECT_ROOT, "secrets")
+TENANTS_JSON = os.path.join(SECRETS_DIR, "tenants.json")
+USE_FIRESTORE = True
 
 # ── Flask ─────────────────────────────────────────────────────────────────────
 app = Flask(__name__)
@@ -38,28 +37,38 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "orchestrate")
 
 
-SHARED_MODEL_DIR      = os.path.join(DATA_DIR, "downloads")
+SHARED_MODEL_DIR = os.path.join(DATA_DIR, "downloads")
 SHARED_MODEL_FILENAME = "0009_model.tflite"
 os.makedirs(SHARED_MODEL_DIR, exist_ok=True)
 
 # ── TFLOPs ────────────────────────────────────────────────────────────────────
-FLOPS_PER_IMAGE: float = 12.6e6   # MobileNet 28×28, fwd+bwd per image per epoch
+FLOPS_PER_IMAGE: float = 12.6e6  # MobileNet 28×28, fwd+bwd per image per epoch
+
 
 def _tflops_per_task(cfg: dict) -> float:
     return cfg["ITEMS_PER_BIN"] * cfg["NUM_EPOCHS"] * FLOPS_PER_IMAGE / 1e12
 
+
 def _tflops_full_session(cfg: dict) -> float:
-    return (cfg["N_BINS"] * cfg["ITEMS_PER_BIN"]
-            * cfg["NUM_EPOCHS"] * cfg["MAX_ROUNDS"]
-            * FLOPS_PER_IMAGE / 1e12)
+    return (
+        cfg["N_BINS"]
+        * cfg["ITEMS_PER_BIN"]
+        * cfg["NUM_EPOCHS"]
+        * cfg["MAX_ROUNDS"]
+        * FLOPS_PER_IMAGE
+        / 1e12
+    )
+
 
 def _calc_reward(total_device_mbs: float, max_clients: int) -> float:
     """Reward per task = total device MB budget ÷ number of client slots."""
     return round(total_device_mbs / max_clients, 4) if max_clients > 0 else 0.0
 
+
 # ── Fashion-MNIST shared cache ────────────────────────────────────────────────
-_fashion_mnist_lock  = threading.Lock()
+_fashion_mnist_lock = threading.Lock()
 _fashion_mnist_cache: Optional[tuple] = None
+
 
 def _load_fashion_mnist():
     global _fashion_mnist_cache
@@ -75,7 +84,7 @@ def _load_fashion_mnist():
 
 @app.after_request
 def add_cors(response):
-    response.headers["Access-Control-Allow-Origin"]  = "*"
+    response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Auth-Token"
     return response
@@ -89,6 +98,7 @@ _token_store: dict = {}
 _token_lock = threading.Lock()
 tokens_json = os.path.join(SECRETS_DIR, "tokens.json")
 
+
 def _load_tokens():
     global _token_store
     if os.path.exists(tokens_json):
@@ -100,12 +110,14 @@ def _load_tokens():
     else:
         _token_store = {}
 
+
 def _save_tokens():
     try:
         with open(tokens_json, "w") as f:
             json.dump(_token_store, f, indent=2)
     except Exception:
         pass
+
 
 def _issue_token(user: str, role: str) -> str:
     token = secrets.token_hex(32)
@@ -118,11 +130,13 @@ def _issue_token(user: str, role: str) -> str:
         _save_tokens()
     return token
 
+
 def _revoke_token(token: str):
     with _token_lock:
         _load_tokens()
         _token_store.pop(token, None)
         _save_tokens()
+
 
 def _get_auth() -> dict:
     """Authenticate ONLY from X-Auth-Token header. No cookie fallback.
@@ -143,7 +157,7 @@ class IDRegistry:
     def __init__(self):
         self._lock = threading.Lock()
         self._seg_counters: dict = {}
-        self._task_counter: int  = 0
+        self._task_counter: int = 0
 
     def reset(self):
         with self._lock:
@@ -164,7 +178,9 @@ class IDRegistry:
             return f"{model_id}{data_id}{seg_seq}{ts}", ts
 
     def readable(self, tid: str) -> str:
-        return f"{tid[0:4]}_{tid[4:8]}_{tid[8:15]}_{tid[15:22]}" if len(tid) >= 22 else tid
+        return (
+            f"{tid[0:4]}_{tid[4:8]}_{tid[8:15]}_{tid[15:22]}" if len(tid) >= 22 else tid
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -173,79 +189,102 @@ class IDRegistry:
 class TenantSession:
     def __init__(self, username: str, n: int):
         self.username = username
-        self.n        = n
+        self.n = n
         self.model_id = f"{n:04d}"
-        self.data_id  = f"{n + 1000:04d}"
+        self.data_id = f"{n + 1000:04d}"
 
         self.config: dict = {
-            "MODEL_ID":   self.model_id,
-            "DATA_ID":    self.data_id,
-            "MAX_CLIENTS":          3,
-            "MAX_ROUNDS":           5,
-            "REPETITIVE_TRAINING":  True,
+            "MODEL_ID": self.model_id,
+            "DATA_ID": self.data_id,
+            "MAX_CLIENTS": 3,
+            "MAX_ROUNDS": 5,
+            "REPETITIVE_TRAINING": True,
             "CHECKPOINT_REWARD_RATE": 0.0,
-            "N_BINS":        10,
+            "N_BINS": 10,
             "ITEMS_PER_BIN": 6000,
-            "NUM_EPOCHS":    2,
-            "BATCH_SIZE":    100,
-            "INPUT_SHAPE":   [28, 28],
-            "NUM_CLASSES":   10,
-            "INPUT_TENSOR_NAME":  {"x": "FloatBuffer"},
+            "NUM_EPOCHS": 2,
+            "BATCH_SIZE": 100,
+            "INPUT_SHAPE": [28, 28],
+            "NUM_CLASSES": 10,
+            "INPUT_TENSOR_NAME": {"x": "FloatBuffer"},
             "OUTPUT_TENSOR_NAME": {"loss": "FloatBuffer", "output": "FloatBuffer"},
-            "DATASET":      "Fashion-MNIST",
+            "DATASET": "Fashion-MNIST",
             "ARCHITECTURE": "MobileNet",
             "AUTO_DELETE_CHECKPOINTS": False,
         }
 
         self.state: dict = {
-            "round": 1, "aggregation_done": False, "finished": False,
-            "restarting": False, "paused": True, "running": False,
-            "segments_total": 0, "segments_dispatched": 0, "clients_uploaded": 0,
+            "round": 1,
+            "aggregation_done": False,
+            "finished": False,
+            "restarting": False,
+            "paused": True,
+            "running": False,
+            "segments_total": 0,
+            "segments_dispatched": 0,
+            "clients_uploaded": 0,
         }
 
-        self.max_tflops:       float = 0.0
+        self.max_tflops: float = 0.0
         self.remaining_tflops: float = 0.0
         self._tflops_lock = threading.Lock()
 
-        self.task_queue       = deque()
-        self.task_queue_lock  = threading.Lock()
-        self.assigned_devices: set  = set()
+        self.task_queue = deque()
+        self.task_queue_lock = threading.Lock()
+        self.assigned_devices: set = set()
         self._task_device_map: dict = {}
-        self._task_device_map_lock  = threading.Lock()
+        self._task_device_map_lock = threading.Lock()
         self._bin_segment_cache: list = []
         self.id_registry = IDRegistry()
-        self._log:     list = []
+        self._log: list = []
         self._log_lock = threading.Lock()
 
-        self.download_dir     = os.path.join(DATA_DIR, "tenants", username, "bins")
-        self.upload_dir       = os.path.join(DATA_DIR, "tenants", username, "uploads")
-        self.global_ckpt_path = os.path.join(DATA_DIR, "tenants", username,
-                                              "global_model", "global.ckpt")
-        for p in [self.download_dir, self.upload_dir,
-                  os.path.dirname(self.global_ckpt_path)]:
+        self.download_dir = os.path.join(DATA_DIR, "tenants", username, "bins")
+        self.upload_dir = os.path.join(DATA_DIR, "tenants", username, "uploads")
+        self.global_ckpt_path = os.path.join(
+            DATA_DIR, "tenants", username, "global_model", "global.ckpt"
+        )
+        for p in [
+            self.download_dir,
+            self.upload_dir,
+            os.path.dirname(self.global_ckpt_path),
+        ]:
             os.makedirs(p, exist_ok=True)
 
     def add_log(self, msg: str, level: str = "info"):
-        pfx = {"info":"[*]","warn":"[!]","error":"[X]","success":"[+]"}.get(level,"[*]")
+        pfx = {"info": "[*]", "warn": "[!]", "error": "[X]", "success": "[+]"}.get(
+            level, "[*]"
+        )
         print(f"[{self.username}] {pfx} {msg}")
         with self._log_lock:
-            self._log.append({"time": datetime.now().strftime("%H:%M:%S"),
-                               "level": level, "msg": msg})
+            self._log.append(
+                {
+                    "time": datetime.now().strftime("%H:%M:%S"),
+                    "level": level,
+                    "msg": msg,
+                }
+            )
             if len(self._log) > 300:
                 self._log.pop(0)
 
     def get_status(self) -> dict:
         cfg = self.config
         tflite_path = os.path.join(SHARED_MODEL_DIR, SHARED_MODEL_FILENAME)
-        tflite_kb   = round(os.path.getsize(tflite_path) / 1024, 1) \
-                      if os.path.exists(tflite_path) else 0
+        tflite_kb = (
+            round(os.path.getsize(tflite_path) / 1024, 1)
+            if os.path.exists(tflite_path)
+            else 0
+        )
         with self._log_lock:
             log_snap = list(self._log)
         return {
-            "round": self.state["round"], "max_rounds": cfg["MAX_ROUNDS"],
+            "round": self.state["round"],
+            "max_rounds": cfg["MAX_ROUNDS"],
             "aggregation_done": self.state["aggregation_done"],
-            "paused": self.state["paused"], "finished": self.state["finished"],
-            "restarting": self.state["restarting"], "running": self.state["running"],
+            "paused": self.state["paused"],
+            "finished": self.state["finished"],
+            "restarting": self.state["restarting"],
+            "running": self.state["running"],
             "segments_total": self.state["segments_total"],
             "segments_dispatched": self.state["segments_dispatched"],
             "segments_remaining": len(self.task_queue),
@@ -253,21 +292,26 @@ class TenantSession:
             "assigned_devices": list(self.assigned_devices),
             "clients_uploaded": self.state["clients_uploaded"],
             "tflite_model_size_kb": tflite_kb,
-            "global_model_exists":  os.path.exists(self.global_ckpt_path),
-            "remaining_tflops":    round(self.remaining_tflops,     6),
-            "max_tflops":          round(self.max_tflops,           6),
-            "tflops_per_task":     round(_tflops_per_task(cfg),     6),
+            "global_model_exists": os.path.exists(self.global_ckpt_path),
+            "remaining_tflops": round(self.remaining_tflops, 6),
+            "max_tflops": round(self.max_tflops, 6),
+            "tflops_per_task": round(_tflops_per_task(cfg), 6),
             "tflops_full_session": round(_tflops_full_session(cfg), 6),
-            "flops_per_image":     FLOPS_PER_IMAGE,
+            "flops_per_image": FLOPS_PER_IMAGE,
             "config": {
-                "MODEL_ID": cfg["MODEL_ID"], "DATA_ID": cfg["DATA_ID"],
-                "MAX_CLIENTS": cfg["MAX_CLIENTS"], "MAX_ROUNDS": cfg["MAX_ROUNDS"],
+                "MODEL_ID": cfg["MODEL_ID"],
+                "DATA_ID": cfg["DATA_ID"],
+                "MAX_CLIENTS": cfg["MAX_CLIENTS"],
+                "MAX_ROUNDS": cfg["MAX_ROUNDS"],
                 "REPETITIVE_TRAINING": cfg["REPETITIVE_TRAINING"],
                 "AUTO_DELETE_CHECKPOINTS": cfg.get("AUTO_DELETE_CHECKPOINTS", False),
                 "CHECKPOINT_REWARD_RATE": cfg.get("CHECKPOINT_REWARD_RATE", 0.0),
-                "N_BINS": cfg["N_BINS"], "ITEMS_PER_BIN": cfg["ITEMS_PER_BIN"],
-                "NUM_EPOCHS": cfg["NUM_EPOCHS"], "BATCH_SIZE": cfg["BATCH_SIZE"],
-                "INPUT_SHAPE": cfg["INPUT_SHAPE"], "NUM_CLASSES": cfg["NUM_CLASSES"],
+                "N_BINS": cfg["N_BINS"],
+                "ITEMS_PER_BIN": cfg["ITEMS_PER_BIN"],
+                "NUM_EPOCHS": cfg["NUM_EPOCHS"],
+                "BATCH_SIZE": cfg["BATCH_SIZE"],
+                "INPUT_SHAPE": cfg["INPUT_SHAPE"],
+                "NUM_CLASSES": cfg["NUM_CLASSES"],
                 "DATASET": cfg.get("DATASET", "Fashion-MNIST"),
                 "ARCHITECTURE": cfg.get("ARCHITECTURE", "—"),
                 "IMG_SIZE": cfg["INPUT_SHAPE"][0] if cfg["INPUT_SHAPE"] else 28,
@@ -279,14 +323,16 @@ class TenantSession:
         self.add_log("Loading Fashion-MNIST dataset...", "info")
         images_raw, labels_raw = _load_fashion_mnist()
         n_bins = self.config["N_BINS"]
-        items  = self.config["ITEMS_PER_BIN"]
+        items = self.config["ITEMS_PER_BIN"]
         if n_bins * items > len(images_raw):
             raise ValueError(
-                f"Not enough data — need {n_bins * items}, have {len(images_raw)}.")
-        idx    = np.random.permutation(len(images_raw))
+                f"Not enough data — need {n_bins * items}, have {len(images_raw)}."
+            )
+        idx = np.random.permutation(len(images_raw))
         images = (images_raw[idx] / 255.0).astype(np.float32)
-        labels = to_categorical(labels_raw[idx],
-                                self.config["NUM_CLASSES"]).astype(np.float32)
+        labels = to_categorical(labels_raw[idx], self.config["NUM_CLASSES"]).astype(
+            np.float32
+        )
         os.makedirs(self.download_dir, exist_ok=True)
         bin_files = []
         for i in range(n_bins):
@@ -303,7 +349,9 @@ class TenantSession:
             if not os.path.exists(img_path) or not os.path.exists(lbl_path):
                 raise RuntimeError(f"Bin {i} failed to write to disk.")
             bin_files.append((img_n, lbl_n))
-        self.add_log(f"{n_bins} bin pair(s) written to '{self.download_dir}'.", "success")
+        self.add_log(
+            f"{n_bins} bin pair(s) written to '{self.download_dir}'.", "success"
+        )
         self._bin_segment_cache = []
         data_id = self.config["DATA_ID"]
         for img_n, lbl_n in bin_files:
@@ -317,39 +365,51 @@ class TenantSession:
         self.add_log(f"Building queue MODEL={mid} DATA={did}", "info")
         for img_n, lbl_n, dsid, ss in self._bin_segment_cache:
             tid, tseq = self.id_registry.generateTaskId(mid, did, ss)
-            self.task_queue.append({
-                "task_Id": tid, "task_Id_readable": self.id_registry.readable(tid),
-                "tenant_id": self.username,
-                "model_id": mid, "data_id": did,
-                "data_segment_id": dsid, "segment_sequence": ss, "task_sequence": tseq,
-                "architecture": self.config["ARCHITECTURE"],
-                "reward_rate":  self.config["CHECKPOINT_REWARD_RATE"],
-                "taskType": "ActiveTask",
-                "task_expire_date": (datetime.now()+timedelta(days=7)).strftime("%Y-%m-%d"),
-                "task_completion_status": False,
-                "training_type": ["Image_Task","Image_DataInitializer",
-                                  "Image_Trainer","Image_InferenceValidator"],
-                "CKPT_FILENAME":         "checkpoint.ckpt",
-                "NUM_EPOCHS":            self.config["NUM_EPOCHS"],
-                "BATCH_SIZE":            self.config["BATCH_SIZE"],
-                "NUM_TRAININGS":         self.config["ITEMS_PER_BIN"],
-                "INPUT_SHAPE":           self.config["INPUT_SHAPE"],
-                "NUM_CLASSES":           self.config["NUM_CLASSES"],
-                "input_tensor_name":     self.config["INPUT_TENSOR_NAME"],
-                "output_tensor_name":    self.config["OUTPUT_TENSOR_NAME"],
-                "MODEL_FILENAME":        SHARED_MODEL_FILENAME,
-                "TRAIN_IMAGES_FILENAME": img_n,
-                "TRAIN_LABELS_FILENAME": lbl_n,
-            })
-        self.state["segments_total"]      = len(self.task_queue)
+            self.task_queue.append(
+                {
+                    "task_Id": tid,
+                    "task_Id_readable": self.id_registry.readable(tid),
+                    "tenant_id": self.username,
+                    "model_id": mid,
+                    "data_id": did,
+                    "data_segment_id": dsid,
+                    "segment_sequence": ss,
+                    "task_sequence": tseq,
+                    "architecture": self.config["ARCHITECTURE"],
+                    "reward_rate": self.config["CHECKPOINT_REWARD_RATE"],
+                    "taskType": "ActiveTask",
+                    "task_expire_date": (datetime.now() + timedelta(days=7)).strftime(
+                        "%Y-%m-%d"
+                    ),
+                    "task_completion_status": False,
+                    "training_type": [
+                        "Image_Task",
+                        "Image_DataInitializer",
+                        "Image_Trainer",
+                        "Image_InferenceValidator",
+                    ],
+                    "CKPT_FILENAME": "checkpoint.ckpt",
+                    "NUM_EPOCHS": self.config["NUM_EPOCHS"],
+                    "BATCH_SIZE": self.config["BATCH_SIZE"],
+                    "NUM_TRAININGS": self.config["ITEMS_PER_BIN"],
+                    "INPUT_SHAPE": self.config["INPUT_SHAPE"],
+                    "NUM_CLASSES": self.config["NUM_CLASSES"],
+                    "input_tensor_name": self.config["INPUT_TENSOR_NAME"],
+                    "output_tensor_name": self.config["OUTPUT_TENSOR_NAME"],
+                    "MODEL_FILENAME": SHARED_MODEL_FILENAME,
+                    "TRAIN_IMAGES_FILENAME": img_n,
+                    "TRAIN_LABELS_FILENAME": lbl_n,
+                }
+            )
+        self.state["segments_total"] = len(self.task_queue)
         self.state["segments_dispatched"] = 0
-        self.state["clients_uploaded"]    = 0
+        self.state["clients_uploaded"] = 0
         self.add_log(f"{len(self.task_queue)} task(s) queued.", "success")
 
     def start(self, max_tflops: float):
         def _run():
             self.state["restarting"] = True
-            self.state["running"]    = True
+            self.state["running"] = True
             try:
                 for fn in os.listdir(self.upload_dir):
                     if fn.endswith((".ckpt", ".json")):
@@ -357,12 +417,17 @@ class TenantSession:
                 self.assigned_devices.clear()
                 with self._task_device_map_lock:
                     self._task_device_map.clear()
-                self.state.update({
-                    "round": 1, "aggregation_done": False, "finished": False,
-                    "segments_dispatched": 0, "clients_uploaded": 0,
-                })
+                self.state.update(
+                    {
+                        "round": 1,
+                        "aggregation_done": False,
+                        "finished": False,
+                        "segments_dispatched": 0,
+                        "clients_uploaded": 0,
+                    }
+                )
                 with self._tflops_lock:
-                    self.max_tflops       = max_tflops
+                    self.max_tflops = max_tflops
                     self.remaining_tflops = max_tflops
                 self.id_registry.reset()
                 self._init_bins()
@@ -370,25 +435,31 @@ class TenantSession:
                 self.state["paused"] = True
                 self.add_log(
                     f"Session started (PAUSED). TFLOPs={max_tflops:.4f} | "
-                    f"Reward/task={self.config['CHECKPOINT_REWARD_RATE']} MB", "success")
+                    f"Reward/task={self.config['CHECKPOINT_REWARD_RATE']} MB",
+                    "success",
+                )
             except Exception as e:
                 self.add_log(f"Session start failed: {e}", "error")
                 self.state["running"] = False
             finally:
                 self.state["restarting"] = False
+
         threading.Thread(target=_run, daemon=True).start()
 
     def do_federated_averaging(self):
         self.add_log("Federated Averaging: Starting...", "info")
-        files = [os.path.join(self.upload_dir, f)
-                 for f in os.listdir(self.upload_dir) if f.endswith(".ckpt")]
+        files = [
+            os.path.join(self.upload_dir, f)
+            for f in os.listdir(self.upload_dir)
+            if f.endswith(".ckpt")
+        ]
         if not files:
             self.add_log("No checkpoints found.", "warn")
             return
         reader = tf.train.load_checkpoint(files[0])
-        keys   = list(reader.get_variable_to_shape_map().keys())
-        acc    = {k: None for k in keys}
-        n_ok   = 0
+        keys = list(reader.get_variable_to_shape_map().keys())
+        acc = {k: None for k in keys}
+        n_ok = 0
         for ckpt in files:
             try:
                 r = tf.train.load_checkpoint(ckpt)
@@ -410,9 +481,12 @@ class TenantSession:
             v = acc[k]
             assert v is not None, f"acc['{k}'] is None despite n_ok={n_ok}"
             vals.append(tf.convert_to_tensor(v / n_ok))
-        tf.raw_ops.Save(filename=tf.constant(self.global_ckpt_path),
-                        tensor_names=tf.constant(list(keys)), data=vals,
-                        name="fed_save")
+        tf.raw_ops.Save(
+            filename=tf.constant(self.global_ckpt_path),
+            tensor_names=tf.constant(list(keys)),
+            data=vals,
+            name="fed_save",
+        )
         self.state["aggregation_done"] = True
         self.state["round"] += 1
         self.add_log(f"Global model saved. Round {self.state['round']}.", "success")
@@ -424,19 +498,19 @@ class TenantSession:
 # ─────────────────────────────────────────────────────────────────────────────
 #  Tenant Registry + JSON persistence
 # ─────────────────────────────────────────────────────────────────────────────
-_tenants: dict       = {}
-_tenants_lock        = threading.Lock()
+_tenants: dict = {}
+_tenants_lock = threading.Lock()
 _tenant_counter: int = 0
 _tenant_counter_lock = threading.Lock()
 
 _rr_index: int = -1
-_rr_lock        = threading.Lock()
+_rr_lock = threading.Lock()
 
-_global_task_tenant_map:  dict = {}
-_global_task_tenant_lock  = threading.Lock()
+_global_task_tenant_map: dict = {}
+_global_task_tenant_lock = threading.Lock()
 
-_task_download_map:  dict = {}
-_task_download_lock  = threading.Lock()
+_task_download_map: dict = {}
+_task_download_lock = threading.Lock()
 
 
 def _next_n() -> int:
@@ -452,15 +526,17 @@ def _save_tenants():
     with _tenants_lock:
         for username, t in _tenants.items():
             s: TenantSession = t["session"]
-            data.append({
-                "username":        username,
-                "password":        t["password"],
-                "n":               t["n"],
-                "max_tflops":      t["max_tflops"],
-                "total_device_mbs": t["total_device_mbs"],
-                "active":          t["active"],
-                "config":          s.config,
-            })
+            data.append(
+                {
+                    "username": username,
+                    "password": t["password"],
+                    "n": t["n"],
+                    "max_tflops": t["max_tflops"],
+                    "total_device_mbs": t["total_device_mbs"],
+                    "active": t["active"],
+                    "config": s.config,
+                }
+            )
     try:
         with open(TENANTS_JSON, "w") as f:
             json.dump({"tenant_counter": _tenant_counter, "tenants": data}, f, indent=2)
@@ -482,19 +558,19 @@ def _load_tenants():
         count = 0
         for entry in saved.get("tenants", []):
             username = entry["username"]
-            n        = entry["n"]
-            sess     = TenantSession(username, n)
+            n = entry["n"]
+            sess = TenantSession(username, n)
             sess.config.update(entry.get("config", {}))
             max_tflops = entry.get("max_tflops", 1.0)
-            active     = entry.get("active", True)
+            active = entry.get("active", True)
             with _tenants_lock:
                 _tenants[username] = {
-                    "password":        entry["password"],
-                    "n":               n,
-                    "max_tflops":      max_tflops,
+                    "password": entry["password"],
+                    "n": n,
+                    "max_tflops": max_tflops,
                     "total_device_mbs": entry.get("total_device_mbs", 150.0),
-                    "active":          active,
-                    "session":         sess,
+                    "active": active,
+                    "session": sess,
                 }
             if active:
                 sess.start(max_tflops)
@@ -504,22 +580,28 @@ def _load_tenants():
         print(f"[!] Could not load tenants.json: {e}")
 
 
-def create_tenant(username: str, password: str, max_tflops: float,
-                  total_device_mbs: float, active: bool = True):
+def create_tenant(
+    username: str,
+    password: str,
+    max_tflops: float,
+    total_device_mbs: float,
+    active: bool = True,
+):
     with _tenants_lock:
         if username in _tenants:
             return False, "Username already exists."
-        n    = _next_n()
+        n = _next_n()
         sess = TenantSession(username, n)
         sess.config["CHECKPOINT_REWARD_RATE"] = _calc_reward(
-            total_device_mbs, sess.config["MAX_CLIENTS"])
+            total_device_mbs, sess.config["MAX_CLIENTS"]
+        )
         _tenants[username] = {
-            "password":        password,
-            "max_tflops":      float(max_tflops),
+            "password": password,
+            "max_tflops": float(max_tflops),
             "total_device_mbs": float(total_device_mbs),
-            "active":          active,
-            "n":               n,
-            "session":         sess,
+            "active": active,
+            "n": n,
+            "session": sess,
         }
         if active:
             sess.start(float(max_tflops))
@@ -537,19 +619,21 @@ def _get_next_tenant_rr():
     with _rr_lock:
         for i in range(len(keys)):
             idx = (_rr_index + 1 + i) % len(keys)
-            u   = keys[idx]
-            t   = snap.get(u)
+            u = keys[idx]
+            t = snap.get(u)
             if not t:
                 continue
             s: TenantSession = t["session"]
-            if (t["active"] and s.state.get("running")
-                    and not s.state.get("paused")
-                    and not s.state.get("finished")
-                    and s.remaining_tflops >= _tflops_per_task(s.config)):
+            if (
+                t["active"]
+                and s.state.get("running")
+                and not s.state.get("paused")
+                and not s.state.get("finished")
+                and s.remaining_tflops >= _tflops_per_task(s.config)
+            ):
                 _rr_index = idx
                 return u, t
     return None, None
-
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -560,16 +644,20 @@ def admin_required(f):
         if _get_auth().get("role") != "admin":
             return redirect(url_for("login"))
         return f(*a, **kw)
+
     w.__name__ = f.__name__
     return w
+
 
 def tenant_required(f):
     def w(*a, **kw):
         if _get_auth().get("role") != "tenant":
             return redirect(url_for("login"))
         return f(*a, **kw)
+
     w.__name__ = f.__name__
     return w
+
 
 def _cur_tenant() -> str:
     return _get_auth().get("user", "")
@@ -645,26 +733,28 @@ def api_list_tenants():
         res = []
         for u, t in _tenants.items():
             s: TenantSession = t["session"]
-            res.append({
-                "username":        u,
-                "n":               t["n"],
-                "model_id":        s.model_id,
-                "data_id":         s.data_id,
-                "max_tflops":      t["max_tflops"],
-                "total_device_mbs": t["total_device_mbs"],
-                "reward_per_task": s.config.get("CHECKPOINT_REWARD_RATE", 0.0),
-                "active":          t["active"],
-                "running":         s.state.get("running",    False),
-                "restarting":      s.state.get("restarting", False),
-                "finished":        s.state.get("finished",   False),
-                "paused":          s.state.get("paused",     True),
-                "round":           s.state.get("round",      1),
-                "max_rounds":      s.config.get("MAX_ROUNDS", 5),
-                "clients_uploaded": s.state.get("clients_uploaded", 0),
-                "num_clients":     s.config.get("MAX_CLIENTS", 0),
-                "remaining_tflops": round(s.remaining_tflops, 4),
-                "tflops_per_task":  round(_tflops_per_task(s.config), 6),
-            })
+            res.append(
+                {
+                    "username": u,
+                    "n": t["n"],
+                    "model_id": s.model_id,
+                    "data_id": s.data_id,
+                    "max_tflops": t["max_tflops"],
+                    "total_device_mbs": t["total_device_mbs"],
+                    "reward_per_task": s.config.get("CHECKPOINT_REWARD_RATE", 0.0),
+                    "active": t["active"],
+                    "running": s.state.get("running", False),
+                    "restarting": s.state.get("restarting", False),
+                    "finished": s.state.get("finished", False),
+                    "paused": s.state.get("paused", True),
+                    "round": s.state.get("round", 1),
+                    "max_rounds": s.config.get("MAX_ROUNDS", 5),
+                    "clients_uploaded": s.state.get("clients_uploaded", 0),
+                    "num_clients": s.config.get("MAX_CLIENTS", 0),
+                    "remaining_tflops": round(s.remaining_tflops, 4),
+                    "tflops_per_task": round(_tflops_per_task(s.config), 6),
+                }
+            )
     return jsonify(res)
 
 
@@ -675,10 +765,13 @@ def api_create_tenant():
     u, p = d.get("username", "").strip(), d.get("password", "").strip()
     if not u or not p:
         return jsonify({"error": "Username and password required."}), 400
-    ok, r = create_tenant(u, p,
-                          float(d.get("max_tflops",       1.0)),
-                          float(d.get("total_device_mbs", 150.0)),
-                          bool(d.get("active", True)))
+    ok, r = create_tenant(
+        u,
+        p,
+        float(d.get("max_tflops", 1.0)),
+        float(d.get("total_device_mbs", 150.0)),
+        bool(d.get("active", True)),
+    )
     if not ok:
         return jsonify({"error": r}), 409
     # create_tenant returns (bool, int | str); after the `ok` guard above
@@ -686,8 +779,9 @@ def api_create_tenant():
     # Narrow `r` to int explicitly so f"{r+1000:04d}" type-checks.
     if not isinstance(r, int):
         return jsonify({"error": "Unexpected server error."}), 500
-    return jsonify({"success": True, "n": r,
-                    "model_id": f"{r:04d}", "data_id": f"{r+1000:04d}"})
+    return jsonify(
+        {"success": True, "n": r, "model_id": f"{r:04d}", "data_id": f"{r+1000:04d}"}
+    )
 
 
 @app.route("/api/admin/tenant/<username>/toggle", methods=["POST"])
@@ -717,7 +811,8 @@ def api_update_tenant(username):
             t["total_device_mbs"] = float(d["total_device_mbs"])
             # Recalculate reward whenever total_device_mbs changes
             t["session"].config["CHECKPOINT_REWARD_RATE"] = _calc_reward(
-                t["total_device_mbs"], t["session"].config["MAX_CLIENTS"])
+                t["total_device_mbs"], t["session"].config["MAX_CLIENTS"]
+            )
         if "password" in d and d["password"]:
             t["password"] = str(d["password"])
         if "active" in d:
@@ -738,9 +833,11 @@ def api_delete_tenant(username):
     # 2. Update the persistent ledger (Firestore Delete + local sync)
     try:
         _db.collection("tenants").document(username).delete()
-        _save_tenants() # Sync remaining states if needed
+        _save_tenants()  # Sync remaining states if needed
     except Exception as e:
-        print(f"[!] FRACTAL OS: Failed to delete tenant doc '{username}' from Firestore: {e}")
+        print(
+            f"[!] FRACTAL OS: Failed to delete tenant doc '{username}' from Firestore: {e}"
+        )
 
     # 3. Physically wipe the tenant's data silo
     tenant_dir = os.path.join(DATA_DIR, "tenants", username)
@@ -750,7 +847,12 @@ def api_delete_tenant(username):
             print(f"[*] FRACTAL OS: Purged physical data silo for tenant '{username}'")
         except Exception as e:
             print(f"[!] FRACTAL OS: Failed to delete directory for '{username}': {e}")
-            return jsonify({"success": True, "warning": "Tenant deleted from registry, but folder deletion failed."})
+            return jsonify(
+                {
+                    "success": True,
+                    "warning": "Tenant deleted from registry, but folder deletion failed.",
+                }
+            )
 
     return jsonify({"success": True})
 
@@ -763,7 +865,7 @@ def api_admin_tenant_status(username):
     if not t:
         return jsonify({"error": "Not found."}), 404
     st = t["session"].get_status()
-    st["max_tflops"]       = t["max_tflops"]
+    st["max_tflops"] = t["max_tflops"]
     st["total_device_mbs"] = t["total_device_mbs"]
     return jsonify(st)
 
@@ -786,9 +888,9 @@ def api_tenant_status():
     if not t:
         return jsonify({"error": "Not found."}), 404
     st = t["session"].get_status()
-    st["max_tflops"]       = t["max_tflops"]
+    st["max_tflops"] = t["max_tflops"]
     st["total_device_mbs"] = t["total_device_mbs"]
-    st["username"]         = u
+    st["username"] = u
     return jsonify(st)
 
 
@@ -800,11 +902,18 @@ def api_tenant_config():
     if not t:
         return jsonify({"error": "Not found."}), 404
     s: TenantSession = t["session"]
-    payload  = request.get_json(force=True, silent=True) or {}
+    payload = request.get_json(force=True, silent=True) or {}
     proposed = dict(s.config)
 
-    for k in ["MAX_CLIENTS","MAX_ROUNDS","N_BINS","ITEMS_PER_BIN",
-              "NUM_EPOCHS","BATCH_SIZE","NUM_CLASSES"]:
+    for k in [
+        "MAX_CLIENTS",
+        "MAX_ROUNDS",
+        "N_BINS",
+        "ITEMS_PER_BIN",
+        "NUM_EPOCHS",
+        "BATCH_SIZE",
+        "NUM_CLASSES",
+    ]:
         if k in payload:
             proposed[k] = int(payload[k])
     if "IMG_SIZE" in payload:
@@ -812,30 +921,43 @@ def api_tenant_config():
     for k in ["REPETITIVE_TRAINING", "AUTO_DELETE_CHECKPOINTS"]:
         if k in payload:
             proposed[k] = bool(payload[k])
-    for k in ["DATASET","ARCHITECTURE"]:
+    for k in ["DATASET", "ARCHITECTURE"]:
         if k in payload:
             proposed[k] = str(payload[k])
 
     # Reward always derived from admin's total_device_mbs / MAX_CLIENTS
     proposed["CHECKPOINT_REWARD_RATE"] = _calc_reward(
-        t["total_device_mbs"], proposed["MAX_CLIENTS"])
+        t["total_device_mbs"], proposed["MAX_CLIENTS"]
+    )
 
     # TFLOPs guard
     projected = _tflops_full_session(proposed)
     if projected > t["max_tflops"] + 1e-9:
-        return jsonify({
-            "error": (f"Rejected — projected {projected:.4f} TFLOPs exceeds "
-                      f"your budget of {t['max_tflops']:.4f} TFLOPs. "
-                      f"Reduce Bins, Items/Bin, Epochs, or Rounds."),
-            "projected_tflops": round(projected, 6),
-            "max_tflops": t["max_tflops"],
-        }), 400
+        return (
+            jsonify(
+                {
+                    "error": (
+                        f"Rejected — projected {projected:.4f} TFLOPs exceeds "
+                        f"your budget of {t['max_tflops']:.4f} TFLOPs. "
+                        f"Reduce Bins, Items/Bin, Epochs, or Rounds."
+                    ),
+                    "projected_tflops": round(projected, 6),
+                    "max_tflops": t["max_tflops"],
+                }
+            ),
+            400,
+        )
 
     s.config = proposed
     _save_tenants()
-    return jsonify({"success": True, "config": s.config,
-                    "projected_tflops": round(projected, 6),
-                    "max_tflops": t["max_tflops"]})
+    return jsonify(
+        {
+            "success": True,
+            "config": s.config,
+            "projected_tflops": round(projected, 6),
+            "max_tflops": t["max_tflops"],
+        }
+    )
 
 
 @app.route("/api/tenant/start", methods=["POST"])
@@ -863,7 +985,9 @@ def api_tenant_pause():
         return jsonify({"error": "Not found."}), 404
     s: TenantSession = t["session"]
     s.state["paused"] = not s.state["paused"]
-    s.add_log(f"Session {'paused' if s.state['paused'] else 'resumed'} by tenant.", "warn")
+    s.add_log(
+        f"Session {'paused' if s.state['paused'] else 'resumed'} by tenant.", "warn"
+    )
     return jsonify({"paused": s.state["paused"]})
 
 
@@ -906,7 +1030,7 @@ def get_current_task():
 
     with s._task_device_map_lock:
         s._task_device_map[task["task_Id"]] = {
-            "device_id":  device_id,
+            "device_id": device_id,
             "reward_mbs": float(task["reward_rate"]),
         }
     with _global_task_tenant_lock:
@@ -925,7 +1049,7 @@ def get_current_task():
 
 @app.route("/api/model/upload", methods=["POST"])
 def upload_checkpoint():
-    task_Id   = request.form.get("task_Id") or request.form.get("taskId") or "unknown"
+    task_Id = request.form.get("task_Id") or request.form.get("taskId") or "unknown"
     device_id = request.form.get("device_id", "unknown_device")
 
     tenant_id = None
@@ -964,19 +1088,31 @@ def upload_checkpoint():
         di = s._task_device_map.pop(task_Id, None)
 
     target_device_id = di.get("device_id") if di else device_id
-    reward_mbs       = di.get("reward_mbs") if di else float(s.config.get("CHECKPOINT_REWARD_RATE", 33.3333) or 33.3333)
+    reward_mbs = (
+        di.get("reward_mbs")
+        if di
+        else float(s.config.get("CHECKPOINT_REWARD_RATE", 33.3333) or 33.3333)
+    )
 
-    ts  = int(datetime.now().timestamp() * 1000)
-    fn  = f"{task_Id}_{target_device_id}_{ts}.ckpt"
+    ts = int(datetime.now().timestamp() * 1000)
+    fn = f"{task_Id}_{target_device_id}_{ts}.ckpt"
     f.save(os.path.join(s.upload_dir, fn))
     s.add_log(f"Received: {fn}", "success")
 
-    if target_device_id and target_device_id.lower() not in ("unknown", "unknown_device", ""):
-        threading.Thread(target=credit_mbs_for_device,
-                         args=(target_device_id, reward_mbs, s),
-                         daemon=True).start()
+    if target_device_id and target_device_id.lower() not in (
+        "unknown",
+        "unknown_device",
+        "",
+    ):
+        threading.Thread(
+            target=credit_mbs_for_device,
+            args=(target_device_id, reward_mbs, s),
+            daemon=True,
+        ).start()
     else:
-        s.add_log(f"Skipping reward: No valid device ID resolved for task {task_Id}.", "warn")
+        s.add_log(
+            f"Skipping reward: No valid device ID resolved for task {task_Id}.", "warn"
+        )
 
     received = [x for x in os.listdir(s.upload_dir) if x.endswith(".ckpt")]
     s.state["clients_uploaded"] = len(received)
@@ -984,13 +1120,20 @@ def upload_checkpoint():
 
     if len(received) >= s.config["MAX_CLIENTS"]:
         s.add_log("All clients reported — triggering Federated Averaging.", "info")
+
         def _agg():
             s.do_federated_averaging()
             import time
+
             time.sleep(2)
             s.assigned_devices.clear()
-            s.state.update({"clients_uploaded": 0, "segments_dispatched": 0,
-                            "aggregation_done": False})
+            s.state.update(
+                {
+                    "clients_uploaded": 0,
+                    "segments_dispatched": 0,
+                    "aggregation_done": False,
+                }
+            )
             if s.config.get("AUTO_DELETE_CHECKPOINTS", False):
                 for x in [x for x in os.listdir(s.upload_dir) if x.endswith(".ckpt")]:
                     try:
@@ -998,9 +1141,13 @@ def upload_checkpoint():
                     except OSError:
                         pass
             else:
-                s.add_log("Auto-delete disabled: keeping round client checkpoints in uploads folder.", "info")
+                s.add_log(
+                    "Auto-delete disabled: keeping round client checkpoints in uploads folder.",
+                    "info",
+                )
             if not s.state["finished"]:
                 s.add_log("Round reset. Ready for next round.", "info")
+
         threading.Thread(target=_agg, daemon=True).start()
 
     return "Upload Successful", 200
@@ -1051,11 +1198,14 @@ def _resolve_tenant(tenant_id: str, task_id: str, filename: str = "") -> str:
 
 @app.route("/download/images")
 def download_images():
-    fn  = request.args.get("filename", "").strip()
+    fn = request.args.get("filename", "").strip()
     if not fn:
         return "filename parameter required.", 400
-    tid = _resolve_tenant(request.args.get("tenant_id", "").strip(),
-                          request.args.get("task_id",   "").strip(), fn)
+    tid = _resolve_tenant(
+        request.args.get("tenant_id", "").strip(),
+        request.args.get("task_id", "").strip(),
+        fn,
+    )
     if not tid:
         return f"Cannot resolve tenant for '{fn}'. Include tenant_id or task_id.", 400
     t = _tenants.get(tid)
@@ -1069,11 +1219,14 @@ def download_images():
 
 @app.route("/download/labels")
 def download_labels():
-    fn  = request.args.get("filename", "").strip()
+    fn = request.args.get("filename", "").strip()
     if not fn:
         return "filename parameter required.", 400
-    tid = _resolve_tenant(request.args.get("tenant_id", "").strip(),
-                          request.args.get("task_id",   "").strip(), fn)
+    tid = _resolve_tenant(
+        request.args.get("tenant_id", "").strip(),
+        request.args.get("task_id", "").strip(),
+        fn,
+    )
     if not tid:
         return f"Cannot resolve tenant for '{fn}'. Include tenant_id or task_id.", 400
     t = _tenants.get(tid)
@@ -1089,17 +1242,22 @@ def download_labels():
 def download_model():
     fn = request.args.get("filename", SHARED_MODEL_FILENAME)
     fp = os.path.join(SHARED_MODEL_DIR, fn)
-    return send_file(fp, as_attachment=True) if os.path.exists(fp) \
+    return (
+        send_file(fp, as_attachment=True)
+        if os.path.exists(fp)
         else (f"Model '{fn}' not found.", 404)
+    )
 
 
 if __name__ == "__main__":
-    _load_tenants()   # Restore tenants from Firestore or local json on startup
+    _load_tenants()  # Restore tenants from Firestore or local json on startup
     print("=" * 60)
     print("  FRACTAL  .  Multi-Tenant Federated Learning Server")
     print("  Admin  -> http://127.0.0.1:5000/admin")
     print("  Tenant -> http://127.0.0.1:5000/tenant")
-    print(f"  Persistence: {'Firebase Firestore' if USE_FIRESTORE else 'Local JSON (secrets/tenants.json)'}")
+    print(
+        f"  Persistence: {'Firebase Firestore' if USE_FIRESTORE else 'Local JSON (secrets/tenants.json)'}"
+    )
     print(f"  Shared model: {SHARED_MODEL_FILENAME}")
     print("  Auth: per-login token in sessionStorage (tab-isolated)")
     print("=" * 60)

@@ -16,7 +16,7 @@ import importlib.util
 
 # ── Dynamic module loader ─────────────────────────────────────────────────────
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-MODULE_PATH  = os.path.join(CURRENT_DIR, "src", "fractal_server", "firebase_reward.py")
+MODULE_PATH = os.path.join(CURRENT_DIR, "src", "fractal_server", "firebase_reward.py")
 
 # Allow override via environment variable for flexible project layouts
 MODULE_PATH = os.environ.get("FIREBASE_REWARD_PATH", MODULE_PATH)
@@ -27,33 +27,40 @@ try:
     sys.modules["firebase_reward"] = firebase_reward
     spec.loader.exec_module(firebase_reward)
 
-    credit_mbs_for_device   = firebase_reward.credit_mbs_for_device
+    credit_mbs_for_device = firebase_reward.credit_mbs_for_device
     _get_email_by_device_id = firebase_reward._get_email_by_device_id
-    _db                     = firebase_reward._db
+    _db = firebase_reward._db
 
 except Exception as e:
-    print(f"[FATAL] Could not load firebase_reward from:\n  {MODULE_PATH}\n  Error: {e}")
+    print(
+        f"[FATAL] Could not load firebase_reward from:\n  {MODULE_PATH}\n  Error: {e}"
+    )
     sys.exit(1)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _section(title: str):
     print("\n" + "=" * 60)
     print(f"  {title}")
     print("=" * 60)
 
+
 def _pass(msg: str):
     print(f"  [PASS] {msg}")
 
+
 def _fail(msg: str):
     print(f"  [FAIL] {msg}")
+
 
 def _info(msg: str):
     print(f"  [INFO] {msg}")
 
 
 # ── Test Cases ────────────────────────────────────────────────────────────────
+
 
 def test_firestore_connection():
     """Test 1 – Firestore client is alive."""
@@ -101,7 +108,7 @@ def test_invalid_device_ids():
     _section("Test 4 · Invalid Device ID Handling")
 
     bad_ids = ["", "unknown", "UNKNOWN", "   ", None]
-    all_ok  = True
+    all_ok = True
 
     for bad_id in bad_ids:
         result = credit_mbs_for_device(bad_id, 10.0)  # type: ignore[arg-type]
@@ -125,13 +132,16 @@ def test_cap_enforcement(device_id: str):
 
     success = credit_mbs_for_device(device_id, 999_999.0)
     if success:
-        _pass("Cap enforcement executed without error (check Firestore balance ≤ 2048 MB).")
+        _pass(
+            "Cap enforcement executed without error (check Firestore balance ≤ 2048 MB)."
+        )
     else:
         _fail("Unexpected failure during cap-enforcement test.")
     return success
 
 
 # ── Test Suite Runner ─────────────────────────────────────────────────────────
+
 
 def run_test_suite(target_device: str = "7b06c36114aebc82", reward_mbs: float = 250.0):
     _section("FRACTAL FIREBASE REWARD — INTEGRATION TEST SUITE")
@@ -164,7 +174,7 @@ def run_test_suite(target_device: str = "7b06c36114aebc82", reward_mbs: float = 
 def _print_summary(results: dict):
     _section("TEST SUMMARY")
     passed = sum(1 for v in results.values() if v)
-    total  = len(results)
+    total = len(results)
 
     for name, ok in results.items():
         status = "PASS" if ok else "FAIL"
@@ -180,7 +190,7 @@ def _print_summary(results: dict):
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         # CLI mode: python test_firebase_reward.py <device_id> [mbs]
-        dev_id  = sys.argv[1]
+        dev_id = sys.argv[1]
         mbs_arg = float(sys.argv[2]) if len(sys.argv) > 2 else 100.0
         _section(f"CLI MODE  ·  device={dev_id}  mbs={mbs_arg}")
         credit_mbs_for_device(dev_id, mbs_arg)

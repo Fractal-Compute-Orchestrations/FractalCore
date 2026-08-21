@@ -18,6 +18,7 @@ import sys
 try:
     from pathlib import Path
     from dotenv import load_dotenv
+
     _ENV_FILE = Path(__file__).resolve().parent / ".env"
     if _ENV_FILE.exists():
         load_dotenv(_ENV_FILE)
@@ -36,7 +37,9 @@ except ImportError as e:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Fractal Conveyor Slicing Pipeline Test Runner")
+    parser = argparse.ArgumentParser(
+        description="Fractal Conveyor Slicing Pipeline Test Runner"
+    )
     parser.add_argument(
         "--model_path",
         type=str,
@@ -70,8 +73,12 @@ def main():
 
     if not os.path.exists(abs_model_path):
         print(f"[WARN] Local directory '{abs_model_path}' does not exist.")
-        print("We will attempt to load directly via Hugging Face Hub (requires network/credentials).")
-        print("To download the model locally first, run: python slicer/scripts/00_download_model.py")
+        print(
+            "We will attempt to load directly via Hugging Face Hub (requires network/credentials)."
+        )
+        print(
+            "To download the model locally first, run: python slicer/scripts/00_download_model.py"
+        )
         print("-" * 60)
 
     try:

@@ -29,10 +29,15 @@ print("==================================================")
 
 try:
     print("[1] Searching 'registered_devices' collection...")
-    
+
     # THE FIX: Search the 'hardwareId' field, not 'macAddress'
-    docs = db.collection("registered_devices").where(filter=FieldFilter("hardwareId", "==", TEST_ID)).limit(1).stream()
-    
+    docs = (
+        db.collection("registered_devices")
+        .where(filter=FieldFilter("hardwareId", "==", TEST_ID))
+        .limit(1)
+        .stream()
+    )
+
     email = None
     for doc in docs:
         data = doc.to_dict()
@@ -46,9 +51,11 @@ try:
 
     print(f"\n[2] Depositing {TEST_REWARD} MBs to 'users' collection...")
     user_ref = db.collection("users").document(email)
-    
+
     doc_before = user_ref.get()
-    balance_before = doc_before.to_dict().get("liquid_mbs", 0.0) if doc_before.exists else 0.0
+    balance_before = (
+        doc_before.to_dict().get("liquid_mbs", 0.0) if doc_before.exists else 0.0
+    )
     print(f"    -> Current Balance: {balance_before} MBs")
 
     user_ref.set({"liquid_mbs": Increment(TEST_REWARD)}, merge=True)
@@ -57,7 +64,7 @@ try:
     doc_after = user_ref.get()
     balance_after = doc_after.to_dict().get("liquid_mbs", 0.0)
     print(f"    -> New Balance:     {balance_after} MBs")
-    
+
     print("\n[+] TEST COMPLETE: Logic executed perfectly.")
 
 except Exception as e:

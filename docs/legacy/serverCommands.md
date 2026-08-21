@@ -1,59 +1,63 @@
+# Fractal Server Operations and Command Reference
 
-# Fractal Server Deployment Guide
+This document lists operational commands for deploying, monitoring, and managing standalone Fractal server instances on remote Linux infrastructure.
 
-## 🟢 Upload Files to Server
-Run this on your **Windows machine** to sync your local project folder with the Oracle instance.
+---
+
+## 1. Remote Synchronization
+
+Synchronize project files from a local development machine to the remote Linux instance:
 
 ```bash
-scp -i "P:\Fractal\Fractal Server\ssh-key-2026-03-06.key" -r "P:\Fractal\Fractal Server" ubuntu@161.118.184.57:~/
+scp -i "/path/to/ssh_key.key" -r "./FractalCore" ubuntu@161.118.184.57:~/
 ```
 
 ---
 
-## 1. Start the System (Run on Ubuntu)
-Connect to your instance and fire up both the **Flask API** and the **Midnight Reset** worker.
+## 2. Process Control
+
+### 2.1 Start Services (Ubuntu / Linux Host)
+
+Connect to the instance and launch the API server and midnight maintenance sweeper:
 
 ```bash
 # 1. Connect via SSH
-ssh -i "P:\Fractal\Fractal Server\ssh-key-2026-03-06.key" ubuntu@161.118.184.57
+ssh -i "/path/to/ssh_key.key" ubuntu@161.118.184.57
 
-# 2. Enter Project & Activate Env
-cd "Fractal Server"
+# 2. Navigate to project directory and activate environment
+cd FractalCore
 source ~/fractal_env/bin/activate
 
-# 3. Start the Global Midnight Sweeper (Background)
-nohup python midnight_reset.py > reset_log.txt 2>&1 &
+# 3. Start the Midnight Sweeper worker in background
+nohup python scripts/midnight_reset.py > reset_log.txt 2>&1 &
 
-# 4. Start the Fractal API Server (Background)
-nohup python server.py > server_log.txt 2>&1 &
+# 4. Start the FractalCore API Server in background
+nohup python src/fractal_server/server.py > server_log.txt 2>&1 &
 
-# 5. Monitor the Logs
+# 5. Stream active server logs
 tail -f server_log.txt
 ```
 
----
+### 2.2 Stop Services
 
-## 2. Stop / Kill the System (Run on Ubuntu)
-Use these commands to gracefully shut down the components.
+Gracefully terminate background services:
 
-### Stop the API Server (Port 5000)
 ```bash
+# Stop API Server (Port 5000)
 fuser -k 5000/tcp
-```
 
-### Stop the Midnight Reset Script
-```bash
+# Stop Midnight Reset Script
 pkill -f midnight_reset.py
 ```
 
 ---
 
-## 3. Maintenance & Health Checks
-Useful commands to ensure everything is running perfectly in the background.
+## 3. Maintenance and Diagnostics
 
-| Goal                          | Command              |
-| :---------------------------- | :------------------- |
-| **Check if both are running** | `ps aux \| grep .py` |
-| **View Reset History**        | `cat reset_log.txt`  |
-| **Check Server Timezone**     | `timedatectl`        |
-| **Clear all stale logs**      | `rm *_log.txt`       |
+| Objective | Command |
+| :--- | :--- |
+| **Check Active Python Services** | `ps aux \| grep .py` |
+| **Inspect Reset Log History** | `cat reset_log.txt` |
+| **Check System Timezone** | `timedatectl` |
+| **Clear Stale Runtime Logs** | `rm -f *_log.txt` |
+| **Inspect Open Ports** | `netstat -tuln \| grep 5000` |

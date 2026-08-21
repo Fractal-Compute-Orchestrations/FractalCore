@@ -33,7 +33,10 @@ sys.stderr.reconfigure(line_buffering=True)
 try:
     from pathlib import Path
     from dotenv import load_dotenv
-    _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent  # inference-model-maker/
+
+    _PROJECT_ROOT = (
+        Path(__file__).resolve().parent.parent.parent
+    )  # inference-model-maker/
     _ENV_FILE = _PROJECT_ROOT / ".env"
     if _ENV_FILE.exists():
         load_dotenv(_ENV_FILE)
@@ -57,7 +60,9 @@ except ImportError:
 # Configuration & Constants
 # ---------------------------------------------------------------------------
 DEFAULT_MODEL_ID: str = "meta-llama/Meta-Llama-3-8B"
-DEFAULT_TARGET_DIR: str = os.getenv("RAW_MODEL_DIR", "./assets/raw_models/Meta-Llama-3-8B")
+DEFAULT_TARGET_DIR: str = os.getenv(
+    "RAW_MODEL_DIR", "./assets/raw_models/Meta-Llama-3-8B"
+)
 
 # Ignore patterns to prevent downloading duplicate or redundant formats.
 # We explicitly target Safetensors (.safetensors) and ignore PyTorch .bin,
@@ -94,6 +99,7 @@ def resolve_auth_token() -> str:
     # 2. Check token from huggingface-cli caching
     try:
         from huggingface_hub import HfFolder
+
         cached_token = HfFolder.get_token()
         if cached_token:
             return cached_token
@@ -107,7 +113,7 @@ def resolve_auth_token() -> str:
         "  1. Request access on Hugging Face: https://huggingface.co/meta-llama/Meta-Llama-3-8B\n"
         "  2. Obtain a User Access Token: https://huggingface.co/settings/tokens\n"
         "  3. Set it in your environment: e.g. export HF_TOKEN=your_token_here (Linux/macOS) "
-        "or $env:HF_TOKEN=\"your_token_here\" (Windows PowerShell)\n"
+        'or $env:HF_TOKEN="your_token_here" (Windows PowerShell)\n'
         "     Alternatively, create a '.env' file in the root workspace containing: HF_TOKEN=your_token_here\n"
     )
 
@@ -132,7 +138,9 @@ def download_model(model_id: str, output_path: str, max_workers: int = 4) -> Non
     print(f"[PROVISIONER] Local target:    {abs_output_path}")
     print("[PROVISIONER] Dtype Focus:     Safetensors (.safetensors)")
     print(f"[PROVISIONER] Ignoring:        {', '.join(IGNORE_PATTERNS)}")
-    print("[PROVISIONER] ------------------------------------------------------------\n")
+    print(
+        "[PROVISIONER] ------------------------------------------------------------\n"
+    )
 
     os.makedirs(abs_output_path, exist_ok=True)
 
@@ -172,7 +180,9 @@ def download_model(model_id: str, output_path: str, max_workers: int = 4) -> Non
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Asset Provisioner: Download Llama 3 8B")
+    parser = argparse.ArgumentParser(
+        description="Asset Provisioner: Download Llama 3 8B"
+    )
     parser.add_argument(
         "--model",
         type=str,
@@ -194,9 +204,13 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     try:
-        download_model(model_id=args.model, output_path=args.output, max_workers=args.workers)
+        download_model(
+            model_id=args.model, output_path=args.output, max_workers=args.workers
+        )
     except KeyboardInterrupt:
-        print("\n\n[PROVISIONER] [INFO] Download interrupted by user. Run the script again to resume.")
+        print(
+            "\n\n[PROVISIONER] [INFO] Download interrupted by user. Run the script again to resume."
+        )
         sys.exit(0)
     except RuntimeError as rerr:
         print(f"\n[PROVISIONER] [ERROR] {rerr}", file=sys.stderr)

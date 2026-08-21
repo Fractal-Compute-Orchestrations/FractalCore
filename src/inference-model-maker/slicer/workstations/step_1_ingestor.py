@@ -35,7 +35,9 @@ import torch
 from transformers import AutoModelForCausalLM
 
 
-def load_model(model_path: str = "./assets/raw_models/Meta-Llama-3-8B") -> torch.nn.Module:
+def load_model(
+    model_path: str = "./assets/raw_models/Meta-Llama-3-8B",
+) -> torch.nn.Module:
     """Ingest the monolithic local model checkpoint onto the host CPU.
 
     Loads the full ``AutoModelForCausalLM`` in ``torch.float16`` with
@@ -71,7 +73,9 @@ def load_model(model_path: str = "./assets/raw_models/Meta-Llama-3-8B") -> torch
         Any other error raised by ``from_pretrained`` propagates unmodified.
     """
     print(f"[Workstation-1] Loading monolithic checkpoint from: '{model_path}'")
-    print("[Workstation-1] Enforcing device_map='cpu', dtype=float16, local_files_only=True")
+    print(
+        "[Workstation-1] Enforcing device_map='cpu', dtype=float16, local_files_only=True"
+    )
 
     model: torch.nn.Module = AutoModelForCausalLM.from_pretrained(
         model_path,

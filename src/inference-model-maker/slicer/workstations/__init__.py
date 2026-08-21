@@ -5,9 +5,9 @@ from . import step_4_delegator
 from . import step_5_exporter
 
 __all__ = [
-    'step_1_ingestor',
-    'step_2_quantizer',
-    'step_3_tracer',
-    'step_4_delegator',
-    'step_5_exporter'
+    "step_1_ingestor",
+    "step_2_quantizer",
+    "step_3_tracer",
+    "step_4_delegator",
+    "step_5_exporter",
 ]

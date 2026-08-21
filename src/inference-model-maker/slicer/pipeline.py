@@ -9,11 +9,27 @@ of its own — it only moves parts along the belt.
 """
 
 from slicer.contracts import IngestOutput
-from slicer.workstations import step_1_ingestor, step_2_quantizer, step_3_tracer, step_4_delegator, step_5_exporter
-from slicer.validators import qa_1_ingestor, qa_2_quantizer, qa_3_tracer, qa_4_delegator, qa_5_exporter
+from slicer.workstations import (
+    step_1_ingestor,
+    step_2_quantizer,
+    step_3_tracer,
+    step_4_delegator,
+    step_5_exporter,
+)
+from slicer.validators import (
+    qa_1_ingestor,
+    qa_2_quantizer,
+    qa_3_tracer,
+    qa_4_delegator,
+    qa_5_exporter,
+)
 
 
-def run_factory_pipeline(model_path: str = "./assets/raw_models/Meta-Llama-3-8B", total_layers: int = 32, output_dir: str = "./output"):
+def run_factory_pipeline(
+    model_path: str = "./assets/raw_models/Meta-Llama-3-8B",
+    total_layers: int = 32,
+    output_dir: str = "./output",
+):
     """
     Main Conveyor Belt Orchestrator loop.
     Acts exclusively as the factory floor manager, handing outputs of one workstation
@@ -56,6 +72,6 @@ def run_factory_pipeline(model_path: str = "./assets/raw_models/Meta-Llama-3-8B"
         output_path = step_5_exporter.serialize(delegated_graph, layer_idx, output_dir)
         qa_5_exporter.verify(output_path)
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("  FACTORY PIPELINE COMPLETE — ALL ASSETS VALIDATED")
-    print("="*60)
+    print("=" * 60)
