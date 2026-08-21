@@ -1,5 +1,12 @@
 from dataclasses import dataclass
-import torch
+from typing import Any
+
+try:
+    import torch
+
+    TorchModule = torch.nn.Module
+except ImportError:
+    TorchModule = Any  # type: ignore[misc,assignment]
 
 
 @dataclass(frozen=True)
@@ -11,27 +18,27 @@ class IngestInput:
 @dataclass(frozen=True)
 class IngestOutput:
     layer_index: int
-    module: torch.nn.Module
+    module: TorchModule
     original_params: int
 
 
 @dataclass(frozen=True)
 class QuantizeInput:
     layer_index: int
-    module: torch.nn.Module
+    module: TorchModule
 
 
 @dataclass(frozen=True)
 class QuantizeOutput:
     layer_index: int
-    module: torch.nn.Module
+    module: TorchModule
     in_memory_size_mb: float
 
 
 @dataclass(frozen=True)
 class TraceInput:
     layer_index: int
-    module: torch.nn.Module
+    module: TorchModule
 
 
 @dataclass(frozen=True)

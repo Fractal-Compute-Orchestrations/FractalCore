@@ -14,31 +14,37 @@ import os
 import sys
 import importlib.util
 
-# ── Dynamic module loader ─────────────────────────────────────────────────────
+# Dynamic module loader
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 MODULE_PATH = os.path.join(CURRENT_DIR, "src", "fractal_server", "firebase_reward.py")
 
 # Allow override via environment variable for flexible project layouts
 MODULE_PATH = os.environ.get("FIREBASE_REWARD_PATH", MODULE_PATH)
 
+credit_mbs_for_device = None
+_get_email_by_device_id = None
+_db = None
+
 try:
-    spec = importlib.util.spec_from_file_location("firebase_reward", MODULE_PATH)
-    firebase_reward = importlib.util.module_from_spec(spec)
-    sys.modules["firebase_reward"] = firebase_reward
-    spec.loader.exec_module(firebase_reward)
+    if os.path.exists(MODULE_PATH):
+        spec = importlib.util.spec_from_file_location("firebase_reward", MODULE_PATH)
+        if spec and spec.loader:
+            firebase_reward = importlib.util.module_from_spec(spec)
+            sys.modules["firebase_reward"] = firebase_reward
+            spec.loader.exec_module(firebase_reward)
 
-    credit_mbs_for_device = firebase_reward.credit_mbs_for_device
-    _get_email_by_device_id = firebase_reward._get_email_by_device_id
-    _db = firebase_reward._db
-
+            credit_mbs_for_device = getattr(
+                firebase_reward, "credit_mbs_for_device", None
+            )
+            _get_email_by_device_id = getattr(
+                firebase_reward, "_get_email_by_device_id", None
+            )
+            _db = getattr(firebase_reward, "_db", None)
 except Exception as e:
-    print(
-        f"[FATAL] Could not load firebase_reward from:\n  {MODULE_PATH}\n  Error: {e}"
-    )
-    sys.exit(1)
+    print(f"[WARN] Could not load firebase_reward from: {MODULE_PATH} (Error: {e})")
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# Helpers
 
 
 def _section(title: str):
@@ -59,24 +65,28 @@ def _info(msg: str):
     print(f"  [INFO] {msg}")
 
 
-# ── Test Cases ────────────────────────────────────────────────────────────────
+# Test Cases (Integration Checks)
 
 
-def test_firestore_connection():
-    """Test 1 – Firestore client is alive."""
-    _section("Test 1 · Firestore Connection")
+def check_firestore_connection():
+    """Check 1 - Firestore client is alive."""
+    _section("Test 1 - Firestore Connection")
     if _db:
         _pass("Firestore client initialized.")
         return True
     else:
-        _fail("Firestore client is None – check service-account.json path.")
+        _fail("Firestore client is None - check service-account.json path.")
         return False
 
 
-def test_device_lookup(device_id: str):
-    """Test 2 – Resolve device_id → email from registered_devices."""
-    _section(f"Test 2 · Device Lookup  [{device_id}]")
+def check_device_lookup(device_id: str):
+    """Check 2 - Resolve device_id -> email from registered_devices."""
+    _section(f"Test 2 - Device Lookup  [{device_id}]")
     _info(f"Querying registered_devices for '{device_id}'...")
+
+    if not _get_email_by_device_id:
+        _fail("Module _get_email_by_device_id is not loaded.")
+        return False, None
 
     email = _get_email_by_device_id(device_id)
     if email:
@@ -87,13 +97,17 @@ def test_device_lookup(device_id: str):
         return False, None
 
 
-def test_reward_crediting(device_id: str, mbs: float, email: str = None):
-    """Test 3 – Credit mbs to the user linked with device_id."""
-    _section(f"Test 3 · Reward Crediting  [{device_id}  +{mbs} MB]")
+def check_reward_crediting(device_id: str, mbs: float, email: str | None = None):
+    """Check 3 - Credit mbs to the user linked with device_id."""
+    _section(f"Test 3 - Reward Crediting  [{device_id}  +{mbs} MB]")
 
     if email:
         _info(f"Expected target user : '{email}'")
     _info(f"Crediting {mbs} MB...")
+
+    if not credit_mbs_for_device:
+        _fail("Module credit_mbs_for_device is not loaded.")
+        return False
 
     success = credit_mbs_for_device(device_id, mbs)
     if success:
@@ -103,9 +117,13 @@ def test_reward_crediting(device_id: str, mbs: float, email: str = None):
     return success
 
 
-def test_invalid_device_ids():
-    """Test 4 – Invalid / empty device IDs must be rejected gracefully."""
-    _section("Test 4 · Invalid Device ID Handling")
+def check_invalid_device_ids():
+    """Check 4 - Invalid / empty device IDs must be rejected gracefully."""
+    _section("Test 4 - Invalid Device ID Handling")
+
+    if not credit_mbs_for_device:
+        _fail("Module credit_mbs_for_device is not loaded.")
+        return False
 
     bad_ids = ["", "unknown", "UNKNOWN", "   ", None]
     all_ok = True
@@ -113,60 +131,60 @@ def test_invalid_device_ids():
     for bad_id in bad_ids:
         result = credit_mbs_for_device(bad_id, 10.0)  # type: ignore[arg-type]
         if not result:
-            _pass(f"Correctly rejected invalid ID: {repr(bad_id)}")
+            _pass(f"Correctly rejected invalid ID: {bad_id!r}")
         else:
-            _fail(f"Accepted an invalid ID (should have rejected): {repr(bad_id)}")
+            _fail(f"Accepted an invalid ID (should have rejected): {bad_id!r}")
             all_ok = False
 
     return all_ok
 
 
-def test_cap_enforcement(device_id: str):
-    """
-    Test 5 – Cap enforcement.
-    Credits an absurdly large value; the function must clamp it to 2048 MB.
-    NOTE: This writes to Firestore. Run against a test account only.
-    """
-    _section(f"Test 5 · 2 GB Cap Enforcement  [{device_id}]")
+def check_cap_enforcement(device_id: str):
+    """Check 5 - Cap enforcement."""
+    _section(f"Test 5 - 2 GB Cap Enforcement  [{device_id}]")
     _info("Attempting to credit 999,999 MB (should be capped at 2048 MB total)...")
+
+    if not credit_mbs_for_device:
+        _fail("Module credit_mbs_for_device is not loaded.")
+        return False
 
     success = credit_mbs_for_device(device_id, 999_999.0)
     if success:
         _pass(
-            "Cap enforcement executed without error (check Firestore balance ≤ 2048 MB)."
+            "Cap enforcement executed without error (check Firestore balance <= 2048 MB)."
         )
     else:
         _fail("Unexpected failure during cap-enforcement test.")
     return success
 
 
-# ── Test Suite Runner ─────────────────────────────────────────────────────────
+# Test Suite Runner
 
 
 def run_test_suite(target_device: str = "7b06c36114aebc82", reward_mbs: float = 250.0):
-    _section("FRACTAL FIREBASE REWARD — INTEGRATION TEST SUITE")
+    _section("FRACTAL FIREBASE REWARD - INTEGRATION TEST SUITE")
 
     results = {}
 
     # 1. Connection
-    results["connection"] = test_firestore_connection()
+    results["connection"] = check_firestore_connection()
     if not results["connection"]:
         print("\n[!] Aborting: no Firestore connection.")
         _print_summary(results)
         return
 
     # 2. Device lookup
-    ok, email = test_device_lookup(target_device)
+    ok, email = check_device_lookup(target_device)
     results["device_lookup"] = ok
 
     # 3. Reward crediting
-    results["reward_credit"] = test_reward_crediting(target_device, reward_mbs, email)
+    results["reward_credit"] = check_reward_crediting(target_device, reward_mbs, email)
 
     # 4. Invalid ID rejection
-    results["invalid_ids"] = test_invalid_device_ids()
+    results["invalid_ids"] = check_invalid_device_ids()
 
-    # 5. Cap enforcement  (comment out if you don't want to write large values)
-    # results["cap_enforcement"] = test_cap_enforcement(target_device)
+    # 5. Cap enforcement
+    # results["cap_enforcement"] = check_cap_enforcement(target_device)
 
     _print_summary(results)
 
@@ -185,14 +203,18 @@ def _print_summary(results: dict):
     print("=" * 60)
 
 
-# ── Entry Point ───────────────────────────────────────────────────────────────
+# Entry Point
 
 if __name__ == "__main__":
+    if not credit_mbs_for_device:
+        print("[FATAL] Could not load firebase_reward module. Exiting.")
+        sys.exit(1)
+
     if len(sys.argv) > 1:
         # CLI mode: python test_firebase_reward.py <device_id> [mbs]
         dev_id = sys.argv[1]
         mbs_arg = float(sys.argv[2]) if len(sys.argv) > 2 else 100.0
-        _section(f"CLI MODE  ·  device={dev_id}  mbs={mbs_arg}")
+        _section(f"CLI MODE - device={dev_id}  mbs={mbs_arg}")
         credit_mbs_for_device(dev_id, mbs_arg)
     else:
         # Default: full test suite with the known test device

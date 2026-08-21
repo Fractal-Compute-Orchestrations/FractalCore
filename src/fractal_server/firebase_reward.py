@@ -5,10 +5,17 @@ import json
 # Fix gRPC DNS resolver hangs on Windows by delegating to the native OS resolver
 os.environ["GRPC_DNS_RESOLVER"] = "native"
 
-import firebase_admin
-from firebase_admin import credentials, firestore as fb_firestore
-from google.cloud.firestore_v1 import Increment
-from google.cloud.firestore_v1.base_query import FieldFilter
+try:
+    import firebase_admin
+    from firebase_admin import credentials, firestore as fb_firestore
+    from google.cloud.firestore_v1 import Increment
+    from google.cloud.firestore_v1.base_query import FieldFilter
+except ImportError:
+    firebase_admin = None
+    credentials = None
+    fb_firestore = None
+    Increment = None
+    FieldFilter = None
 from typing import Optional
 
 # ── Secrets Path Configuration ────────────────────────────────────────────────
@@ -18,18 +25,20 @@ SECRETS_DIR = os.path.join(PROJECT_ROOT, "secrets")
 _SERVICE_ACCOUNT_PATH = os.path.join(SECRETS_DIR, "firebase", "service-account.json")
 
 # ── Firebase Initialization ───────────────────────────────────────────────────
-if not firebase_admin._apps:
-    try:
-        _fb_app = firebase_admin.initialize_app(
-            credentials.Certificate(_SERVICE_ACCOUNT_PATH)
-        )
+_db = None
+if firebase_admin is not None:
+    if not firebase_admin._apps:
+        try:
+            _fb_app = firebase_admin.initialize_app(
+                credentials.Certificate(_SERVICE_ACCOUNT_PATH)
+            )
+            _db = fb_firestore.client()
+            print("[Firebase] Initialized successfully.")
+        except Exception as e:
+            print(f"[Firebase] Initialization failed: {e}")
+            _db = None
+    else:
         _db = fb_firestore.client()
-        print("[Firebase] Initialized successfully.")
-    except Exception as e:
-        print(f"[Firebase] Initialization failed: {e}")
-        _db = None
-else:
-    _db = fb_firestore.client()
 
 
 # ── Internal Helpers ──────────────────────────────────────────────────────────
