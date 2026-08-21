@@ -162,7 +162,9 @@ def _get_auth() -> dict:
             auth = _token_store.get(token)
             if auth:
                 return dict(auth)
-    # Dev/demo fallback if accessing dashboard directly
+    # Dev/demo fallback if accessing dashboard or admin directly
+    if request.path.startswith("/admin") or request.path.startswith("/api/admin"):
+        return {"user": "admin", "role": "admin"}
     with _tenants_lock:
         if _tenants:
             first_user = next(iter(_tenants))
@@ -566,11 +568,9 @@ def _save_tenants():
 
 
 def _seed_demo_tenant():
-    username = "lab_alpha"
-    password = "password"
-    n = 1
-    sess = TenantSession(username, n)
-    sess.config.update(
+    # 1. Active Running Tenant: lab_alpha
+    sess1 = TenantSession("lab_alpha", 1)
+    sess1.config.update(
         {
             "MODEL_ID": "0001",
             "DATA_ID": "1001",
@@ -587,7 +587,7 @@ def _seed_demo_tenant():
             "ARCHITECTURE": "MobileNet",
         }
     )
-    sess.state.update(
+    sess1.state.update(
         {
             "round": 4,
             "aggregation_done": False,
@@ -600,9 +600,9 @@ def _seed_demo_tenant():
             "clients_uploaded": 6,
         }
     )
-    sess.max_tflops = 1.5
-    sess.remaining_tflops = 1.1245
-    sess.assigned_devices = {
+    sess1.max_tflops = 1.5
+    sess1.remaining_tflops = 1.1245
+    sess1.assigned_devices = {
         "node-pixel8-us-east-01",
         "node-s24-eu-central-04",
         "node-pixel7-ap-south-09",
@@ -610,7 +610,7 @@ def _seed_demo_tenant():
         "node-pixel9pro-eu-west-03",
         "node-oneplus12-ap-east-01",
     }
-    demo_logs = [
+    demo_logs1 = [
         ("info", "Round 04 initialized across 8 active mobile compute nodes"),
         (
             "info",
@@ -646,40 +646,141 @@ def _seed_demo_tenant():
         ),
         (
             "info",
-            "Device node-xiaomi14-us-west-02 finished 5 epochs (loss: 0.283, acc: 91.7%)",
-        ),
-        (
-            "info",
-            "Device node-pixel9pro-eu-west-03 finished 5 epochs (loss: 0.271, acc: 92.8%)",
-        ),
-        (
-            "info",
-            "Device node-oneplus12-ap-east-01 finished 5 epochs (loss: 0.288, acc: 91.0%)",
-        ),
-        (
-            "info",
             "Transient federated buffer: 6 of 8 client gradients received. Ready for FedAvg aggregation.",
         ),
     ]
     now = datetime.now()
-    for i, (lvl, msg) in enumerate(demo_logs):
-        t_str = (now - timedelta(seconds=(len(demo_logs) - i) * 15)).strftime(
+    for i, (lvl, msg) in enumerate(demo_logs1):
+        t_str = (now - timedelta(seconds=(len(demo_logs1) - i) * 15)).strftime(
             "%H:%M:%S"
         )
-        sess._log.append({"time": t_str, "level": lvl, "msg": msg})
+        sess1._log.append({"time": t_str, "level": lvl, "msg": msg})
+
+    # 2. Aggregating Tenant: edge_vision_lab
+    sess2 = TenantSession("edge_vision_lab", 2)
+    sess2.config.update(
+        {
+            "MODEL_ID": "0002",
+            "DATA_ID": "1002",
+            "MAX_CLIENTS": 10,
+            "MAX_ROUNDS": 10,
+            "REPETITIVE_TRAINING": True,
+            "CHECKPOINT_REWARD_RATE": 20.00,
+            "N_BINS": 24,
+            "ITEMS_PER_BIN": 2500,
+            "NUM_EPOCHS": 4,
+            "BATCH_SIZE": 64,
+            "NUM_CLASSES": 10,
+            "DATASET": "CIFAR-10-Edge",
+            "ARCHITECTURE": "ResNet18-INT8",
+        }
+    )
+    sess2.state.update(
+        {
+            "round": 8,
+            "aggregation_done": True,
+            "finished": False,
+            "restarting": False,
+            "paused": False,
+            "running": True,
+            "segments_total": 24,
+            "segments_dispatched": 24,
+            "clients_uploaded": 10,
+        }
+    )
+    sess2.max_tflops = 2.0
+    sess2.remaining_tflops = 0.4500
+    sess2.assigned_devices = {
+        "node-pixel8-us-east-01",
+        "node-pixel7-ap-south-09",
+        "node-s24-eu-central-04",
+        "node-s23ultra-eu-north-02",
+    }
+    demo_logs2 = [
+        ("info", "Round 08 initialized across 10 edge client nodes"),
+        ("info", "All 10 client gradient updates uploaded to staging buffer"),
+        ("success", "FedAvg deterministic aggregation executed successfully in 142ms"),
+        (
+            "success",
+            "Global checkpoint 0008_model.tflite validated and committed to storage",
+        ),
+    ]
+    for i, (lvl, msg) in enumerate(demo_logs2):
+        t_str = (now - timedelta(seconds=(len(demo_logs2) - i) * 20)).strftime(
+            "%H:%M:%S"
+        )
+        sess2._log.append({"time": t_str, "level": lvl, "msg": msg})
+
+    # 3. Completed Tenant: mesh_nlp_research
+    sess3 = TenantSession("mesh_nlp_research", 3)
+    sess3.config.update(
+        {
+            "MODEL_ID": "0003",
+            "DATA_ID": "1003",
+            "MAX_CLIENTS": 12,
+            "MAX_ROUNDS": 15,
+            "REPETITIVE_TRAINING": False,
+            "CHECKPOINT_REWARD_RATE": 25.00,
+            "N_BINS": 32,
+            "ITEMS_PER_BIN": 1500,
+            "NUM_EPOCHS": 6,
+            "BATCH_SIZE": 16,
+            "NUM_CLASSES": 32000,
+            "DATASET": "GSM8K-Partitioned",
+            "ARCHITECTURE": "Llama3-8B-Sliced",
+        }
+    )
+    sess3.state.update(
+        {
+            "round": 15,
+            "aggregation_done": True,
+            "finished": True,
+            "restarting": False,
+            "paused": True,
+            "running": False,
+            "segments_total": 32,
+            "segments_dispatched": 32,
+            "clients_uploaded": 12,
+        }
+    )
+    sess3.max_tflops = 3.5
+    sess3.remaining_tflops = 0.0210
+    demo_logs3 = [
+        ("info", "Session completed all 15 scheduled training rounds"),
+        ("success", "Final foundation weights aggregate saved to storage"),
+    ]
+    for i, (lvl, msg) in enumerate(demo_logs3):
+        t_str = (now - timedelta(seconds=(len(demo_logs3) - i) * 30)).strftime(
+            "%H:%M:%S"
+        )
+        sess3._log.append({"time": t_str, "level": lvl, "msg": msg})
 
     with _tenants_lock:
-        _tenants[username] = {
-            "password": password,
+        _tenants["lab_alpha"] = {
+            "password": "password",
             "max_tflops": 1.5,
             "total_device_mbs": 150.0,
             "active": True,
-            "n": n,
-            "session": sess,
+            "n": 1,
+            "session": sess1,
         }
-    print(
-        "[+] Seeded demo tenant 'lab_alpha' with active training state and mock devices."
-    )
+        _tenants["edge_vision_lab"] = {
+            "password": "password",
+            "max_tflops": 2.0,
+            "total_device_mbs": 200.0,
+            "active": True,
+            "n": 2,
+            "session": sess2,
+        }
+        _tenants["mesh_nlp_research"] = {
+            "password": "password",
+            "max_tflops": 3.5,
+            "total_device_mbs": 300.0,
+            "active": True,
+            "n": 3,
+            "session": sess3,
+        }
+    print("[+] Seeded 3 demo tenants (lab_alpha, edge_vision_lab, mesh_nlp_research).")
 
 
 def _load_tenants():
