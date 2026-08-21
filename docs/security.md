@@ -38,5 +38,5 @@ Security and privacy are the primary design constraints of the Fractal ecosystem
 ## 3. Storage and Process Hardening
 
 - **Filesystem Sandboxing**: Physical separation of tenant directories prevents cross-tenant file read/write operations.
-- **Single-Use Task Descriptors**: Every task issued to an edge node contains a cryptographic `task_Id`. Checkpoints uploaded with invalid, already-used, or unissued task IDs are rejected with HTTP 400.
+- **Single-Use Task Descriptors**: Every task issued to an edge node contains a unique `task_Id`. Checkpoints uploaded with invalid, already-used, or unissued task IDs are rejected with HTTP 400.
 - **Environment Isolation**: Private keys (`firebase_service_account.json`, `private.envs/`) are excluded from version control via `.gitignore` and `.dockerignore`.
