@@ -9,18 +9,33 @@ from pathlib import Path
 from typing import Optional
 
 import numpy as np
-import tensorflow as tf
 from dotenv import load_dotenv
 from flask import Flask, jsonify, send_file, request, render_template, redirect, url_for
-from tensorflow import keras
+
+try:
+    import tensorflow as tf
+    from tensorflow import keras
+
+    fashion_mnist = keras.datasets.fashion_mnist
+    to_categorical = keras.utils.to_categorical
+except ImportError:
+    tf = None
+    try:
+        import keras
+
+        fashion_mnist = keras.datasets.fashion_mnist
+        to_categorical = keras.utils.to_categorical
+    except ImportError:
+        fashion_mnist = None
+
+        def to_categorical(y, num_classes):
+            return np.eye(num_classes)[y]
+
 
 load_dotenv()
 
 from firebase_reward import _db  # noqa: E402
 from firebase_reward import credit_mbs_for_device  # noqa: E402
-
-fashion_mnist = keras.datasets.fashion_mnist
-to_categorical = keras.utils.to_categorical
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(BASE_DIR))
