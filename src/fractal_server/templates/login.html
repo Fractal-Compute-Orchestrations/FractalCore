@@ -6,10 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Fractal Grid — Login</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Genos:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
     <style>
         @font-face {
             font-family: 'Genos';
-            src: url("{{ url_for('static',filename='Genos-VariableFont_wght.ttf') }}") format('truetype-variations');
+            src: url("{{ url_for('static', filename='Genos-VariableFont_wght.ttf') }}") format('truetype-variations'),
+                 url("{{ url_for('static', filename='Genos-VariableFont_wght.ttf') }}") format('truetype');
             font-weight: 100 900;
             font-style: normal;
         }

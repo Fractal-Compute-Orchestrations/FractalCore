@@ -1,7 +1,17 @@
 @font-face {
     font-family: 'Genos';
-    src:url("{{ url_for('static',filename='Genos-VariableFont_wght.ttf') }}") format('truetype-variations');
+    src: url('Genos-VariableFont_wght.ttf') format('truetype-variations'),
+         url('Genos-VariableFont_wght.ttf') format('truetype');
     font-weight: 100 900;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Genos';
+    src: url('Genos-Italic-VariableFont_wght.ttf') format('truetype-variations'),
+         url('Genos-Italic-VariableFont_wght.ttf') format('truetype');
+    font-weight: 100 900;
+    font-style: italic;
 }
 
 *,
