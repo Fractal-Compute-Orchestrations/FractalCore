@@ -4,19 +4,13 @@ Security and privacy are the primary design constraints of the Fractal ecosystem
 
 ---
 
-## Threat Model and Security Tenets
-
-```text
-+----------------------------+-------------------------------------------------------------+
-| Threat Category            | System Mitigation Strategy                                  |
-+----------------------------+-------------------------------------------------------------+
-| Data Privacy Breach        | Zero raw dataset ingress; client data never leaves device   |
-| Session Leakage            | Header-bound X-Auth-Token without cookie fallback           |
-| Cross-Tenant Data Access   | Sandboxed directory trees (data/tenants/{username}/)        |
-| Model Poisoning / Replay   | Single-use task_Id bound to dispatch records in memory      |
-| Credential Exposure        | Service account isolation via environment variables         |
-+----------------------------+-------------------------------------------------------------+
-```
+| Threat Category | System Mitigation Strategy |
+| :--- | :--- |
+| **Data Privacy Breach** | Zero raw dataset ingress; client data never leaves device |
+| **Session Leakage** | Header-bound `X-Auth-Token` without cookie fallback |
+| **Cross-Tenant Data Access** | Sandboxed directory trees (`data/tenants/{username}/`) |
+| **Model Poisoning / Replay** | Single-use `task_Id` bound to dispatch records in memory |
+| **Credential Exposure** | Service account isolation via environment variables |
 
 ---
 
