@@ -1,6 +1,6 @@
 <div align="center">
 
-![Fractal Banner](docs/assets/Fractal_Banner.png)
+![Fractal Server Header](docs/assets/Fractal_server_header.png)
 
 # FractalCore
 ### High-Performance Orchestration Engine, Federated Aggregator, and Model Graph Slicer
