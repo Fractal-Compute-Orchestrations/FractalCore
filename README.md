@@ -1,5 +1,7 @@
 <div align="center">
 
+![Fractal Banner](docs/assets/Fractal_Banner.png)
+
 # FractalCore
 ### High-Performance Orchestration Engine, Federated Aggregator, and Model Graph Slicer
 
@@ -11,7 +13,7 @@
 
 **FractalCore is the central server, control plane, and model compilation engine for the Fractal decentralized compute ecosystem.**
 
-[Overview](#overview) | [Design Case Study](https://www.behance.net/gallery/221459335/Fractal) | [Architecture](#system-architecture) | [Core Components](#core-components) | [Data Flow](#data-flow-and-lifecycle) | [API Summary](#api-reference-summary) | [Deployment](#deployment-and-execution) | [Security](#security-model)
+[Overview](#overview) | [Control Plane UI](#control-plane-web-interface) | [Design Case Study](https://www.behance.net/gallery/221459335/Fractal) | [Architecture](#system-architecture) | [Core Components](#core-components) | [Data Flow](#data-flow-and-lifecycle) | [API Summary](#api-reference-summary) | [Deployment](#deployment-and-execution) | [Security](#security-model)
 
 ---
 </div>
@@ -22,6 +24,38 @@ FractalCore serves as the centralized orchestration backbone that coordinates de
 
 1. **Federated Learning Orchestration**: Multi-tenant data binning, task scheduling, client checkpoint verification, and deterministic parameter aggregation via Federated Averaging (`FedAvg`).
 2. **Foundation Model Slicing**: Offline neural graph surgery, INT4 weight quantization, static ATen graph tracing, and XNNPACK lowering (`inference-model-maker/slicer`) to produce memory-safe `.pte` layer partitions for mobile nodes.
+
+---
+
+## Control Plane Web Interface
+
+FractalCore provides a hardware-accelerated, high-density Web UI engineered for orchestrating federated learning tasks, monitoring compute budgets, and isolating tenant silos:
+
+<table>
+  <tr>
+    <th colspan="2" align="center">Tenant Operations Dashboard</th>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">
+      <img src="docs/assets/screenshots/tenant.png" width="100%" alt="Tenant Dashboard">
+      <p align="center"><sub><b>Real-Time Tenant Dashboard:</b> Live TFLOPs quota gauge, dynamic round progress, active mobile node telemetry, and streaming activity log.</sub></p>
+    </td>
+  </tr>
+  <tr>
+    <th width="50%" align="center">Admin Fleet Console</th>
+    <th width="50%" align="center">Node Authentication Portal</th>
+  </tr>
+  <tr>
+    <td valign="top">
+      <img src="docs/assets/screenshots/admin.png" width="100%" alt="Admin Console">
+      <p align="center"><sub><b>Admin Console:</b> Tenant creation, TFLOPs computation caps, MB reward rates, and multi-tenant fleet roster.</sub></p>
+    </td>
+    <td valign="top">
+      <img src="docs/assets/screenshots/login.png" width="100%" alt="Login Portal">
+      <p align="center"><sub><b>Authentication Gate:</b> Tab-isolated per-session tokenized access control with Genos typography.</sub></p>
+    </td>
+  </tr>
+</table>
 
 ---
 
