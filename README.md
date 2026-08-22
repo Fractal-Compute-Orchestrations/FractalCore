@@ -254,9 +254,9 @@ For full vulnerability reporting procedures, refer to [SECURITY.md](SECURITY.md)
 
 ---
 
-## License
+## Governance & Licensing
 
-FractalCore is open-source software licensed under the [Apache License 2.0](LICENSE).
+FractalCore is proprietary, source-available software licensed under the [Fractal Proprietary Non-Commercial License](LICENSE). All Rights Reserved. Commercial use strictly prohibited without written authorization.
 
 ---
 
