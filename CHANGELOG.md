@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Environment variable support via `.env` files.
 - Docker and Docker Compose configuration.
 - GitHub Actions CI/CD workflows for linting and testing.
-- Industry-standard Open Source documentation (LICENSE, CONTRIBUTING, etc.).
+- Comprehensive project governance and restrictive legal documentation (LICENSE, CONTRIBUTING, etc.).
 - Enhanced Security Policy and repository sanitization.
 
 ### Fixed

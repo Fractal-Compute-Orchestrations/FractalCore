@@ -6,7 +6,7 @@
 ### High-Performance Orchestration Engine, Federated Aggregator, and Model Graph Slicer
 
 [![Version](https://img.shields.io/badge/version-1.0.0-black?style=for-the-badge)](https://semver.org)
-[![License](https://img.shields.io/badge/License-Proprietary_Non--Commercial-black?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/License-Proprietary_Non--Commercial_v3.0-black?style=for-the-badge)](LICENSE)
 [![Design](https://img.shields.io/badge/Design_Case_Study-Behance-black?style=for-the-badge&logo=behance)](https://www.behance.net/gallery/221459335/Fractal)
 [![Security](https://img.shields.io/badge/security-hardened-black?style=for-the-badge)](SECURITY.md)
 [![Maintainer](https://img.shields.io/badge/maintained_by-Ahmad_Hassan_(B--Ted)-black?style=for-the-badge)](https://github.com/Fractal-Compute-Orchestrations)
@@ -256,7 +256,7 @@ For full vulnerability reporting procedures, refer to [SECURITY.md](SECURITY.md)
 
 ## Governance & Licensing
 
-FractalCore is proprietary, source-available software licensed under the [Fractal Proprietary Non-Commercial License](LICENSE). All Rights Reserved. Commercial use strictly prohibited without written authorization.
+FractalCore is proprietary, source-available software licensed under the [Fractal Proprietary Source-Available & Non-Commercial Restrictive License v3.0](LICENSE). All Rights Reserved. Commercial use strictly prohibited without written authorization.
 
 ---
 
