@@ -6,7 +6,7 @@
 ### High-Performance Orchestration Engine, Federated Aggregator, and Model Graph Slicer
 
 [![Version](https://img.shields.io/badge/version-1.0.0-black?style=for-the-badge)](https://semver.org)
-[![License](https://img.shields.io/badge/license-Apache_2.0-black?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/License-Proprietary_Non--Commercial-black?style=for-the-badge)](LICENSE)
 [![Design](https://img.shields.io/badge/Design_Case_Study-Behance-black?style=for-the-badge&logo=behance)](https://www.behance.net/gallery/221459335/Fractal)
 [![Security](https://img.shields.io/badge/security-hardened-black?style=for-the-badge)](SECURITY.md)
 [![Maintainer](https://img.shields.io/badge/maintained_by-Ahmad_Hassan_(B--Ted)-black?style=for-the-badge)](https://github.com/Fractal-Compute-Orchestrations)
