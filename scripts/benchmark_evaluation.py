@@ -555,77 +555,76 @@ import matplotlib.patches as patches
 def plot_distributed_edge_efficiency_index():
     """
     Figure 5: Distributed Edge Efficiency Index (Artificial Analysis Leaderboard Style).
+    Uses full black for FRACTAL, official brand colors for all frameworks, and naked official logos beneath each bar.
     """
-    fig, ax = plt.subplots(figsize=(11.5, 7.5), dpi=300)
-    fig.patch.set_facecolor('#FFFFFF')
-    ax.set_facecolor('#FFFFFF')
+    import matplotlib.patches as patches
+    from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+    from PIL import Image
+
+    logos_dir = os.path.join(WORKSPACE_ROOT, "docs", "assets", "framework_logos")
 
     items = [
         {
             "name": "FRACTAL (INT4 Micro-Block)",
             "score": 92,
-            "color": "#059669",
-            "badge_bg": "#047857",
-            "badge_text": "FR",
+            "color": "#0F172A",  # Full Black / Obsidian
+            "icon": os.path.join(logos_dir, "fractal_black_emblem.png"),
             "is_ours": True
         },
         {
             "name": "Flower (QSGD INT8)",
             "score": 71,
-            "color": "#2563EB",
-            "badge_bg": "#1D4ED8",
-            "badge_text": "FL",
+            "color": "#FF2E93",  # Iconic Flower Pink
+            "icon": os.path.join(logos_dir, "flower.png"),
             "is_ours": False
         },
         {
             "name": "NVIDIA FLARE (Enterprise FP16)",
             "score": 65,
-            "color": "#76B900",
-            "badge_bg": "#5A8F00",
-            "badge_text": "NV",
+            "color": "#76B900",  # Iconic NVIDIA Green
+            "icon": os.path.join(logos_dir, "nvidia.png"),
             "is_ours": False
         },
         {
             "name": "FedML (HeteroFL Slicing)",
             "score": 61,
-            "color": "#EA580C",
-            "badge_bg": "#C2410C",
-            "badge_text": "ML",
+            "color": "#0066FF",  # Iconic FedML Tech Blue
+            "icon": os.path.join(logos_dir, "fedml.png"),
             "is_ours": False
         },
         {
             "name": "PySyft (OpenMined INT8)",
             "score": 56,
-            "color": "#7C3AED",
-            "badge_bg": "#6D28D9",
-            "badge_text": "SY",
+            "color": "#7C3AED",  # Iconic OpenMined Violet
+            "icon": os.path.join(logos_dir, "openmined.png"),
             "is_ours": False
         },
         {
             "name": "TensorFlow Fed (TFF FP32)",
             "score": 48,
-            "color": "#F59E0B",
-            "badge_bg": "#D97706",
-            "badge_text": "TF",
+            "color": "#FF6F00",  # Iconic TensorFlow Orange
+            "icon": os.path.join(logos_dir, "tensorflow.png"),
             "is_ours": False
         },
         {
             "name": "PyTorch RPC (Uncompressed FP32)",
             "score": 44,
-            "color": "#E11D48",
-            "badge_bg": "#BE123C",
-            "badge_text": "PT",
+            "color": "#EE4C2C",  # Iconic PyTorch Flame Red
+            "icon": os.path.join(logos_dir, "pytorch.png"),
             "is_ours": False
         },
         {
             "name": "Global Tensor INT4 (Naive)",
             "score": 21,
-            "color": "#475569",
-            "badge_bg": "#334155",
-            "badge_text": "G4",
+            "color": "#64748B",  # Slate Gray (Divergent)
+            "icon": os.path.join(logos_dir, "global_int4_chip.png"),
             "is_ours": False
         }
     ]
+
+    fig, ax = plt.subplots(figsize=(11.5, 7.8), dpi=300)
+    fig.patch.set_facecolor('#FFFFFF')
+    ax.set_facecolor('#FFFFFF')
 
     x = np.arange(len(items))
     bar_width = 0.54
@@ -668,38 +667,37 @@ def plot_distributed_edge_efficiency_index():
     trans_badge = ax.get_xaxis_transform()
 
     for i, it in enumerate(items):
-        badge_w = 0.38
-        badge_h = 0.052
-        badge = patches.FancyBboxPatch(
-            (x[i] - badge_w/2, -0.076),
-            badge_w,
-            badge_h,
-            boxstyle="round,pad=0.01,rounding_size=0.018",
-            mutation_scale=1.0,
-            facecolor=it["badge_bg"],
-            edgecolor='#FFFFFF',
-            linewidth=1.2,
-            zorder=5,
-            clip_on=False,
-            transform=trans_badge
-        )
-        ax.add_patch(badge)
-        
-        ax.text(x[i], -0.050, it["badge_text"], ha='center', va='center',
-                color='#FFFFFF', fontsize=8.5, fontweight='bold', zorder=6,
-                clip_on=False, transform=trans_badge)
-        
-        name_color = "#047857" if it["is_ours"] else "#374151"
+        if os.path.exists(it["icon"]):
+            try:
+                im = Image.open(it["icon"]).convert("RGBA")
+                im.thumbnail((52, 52), Image.Resampling.LANCZOS)
+                
+                imagebox = OffsetImage(np.array(im), zoom=0.62)
+                imagebox.image.axes = ax
+                ab = AnnotationBbox(
+                    imagebox,
+                    (x[i], -0.052),
+                    xycoords=trans_badge,
+                    frameon=False,
+                    box_alignment=(0.5, 0.5),
+                    clip_on=False,
+                    zorder=6
+                )
+                ax.add_artist(ab)
+            except Exception as e:
+                print(f"Error loading {it['icon']}: {e}")
+                
+        name_color = "#0F172A" if it["is_ours"] else "#374151"
         font_weight = "bold" if it["is_ours"] else "normal"
         ax.text(x[i] + 0.05, -0.115, it["name"], ha='right', va='top',
                 rotation=45, fontsize=9.5, fontweight=font_weight,
                 color=name_color, clip_on=False, transform=trans_badge)
 
-    fig.text(0.5, 0.025,
+    fig.text(0.5, 0.022,
              "Index Formulation: 40% Wire Payload Compression Ratio + 40% Layer Reconstruction Fidelity + 20% Mobile Hardware Telemetry Empathy (Thermal Gating & Zero LMK Evictions).",
              ha='center', va='bottom', fontsize=8.2, color='#9CA3AF')
 
-    plt.subplots_adjust(top=0.87, bottom=0.34, left=0.12, right=0.96)
+    plt.subplots_adjust(top=0.87, bottom=0.35, left=0.12, right=0.96)
 
     output_path = os.path.join(OUTPUT_DIR, "distributed_edge_efficiency_index.png")
     plt.savefig(output_path, dpi=300, facecolor=fig.get_facecolor(), edgecolor='none')
