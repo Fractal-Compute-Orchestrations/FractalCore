@@ -58,6 +58,12 @@ def main():
         default="./output",
         help="Directory to save the resulting .pte flatbuffer layers",
     )
+    parser.add_argument(
+        "-d",
+        dest="dry_run",
+        action="store_true",
+        help="Allow simulated tracer/delegator/exporter fallbacks when optional packages are absent.",
+    )
     args = parser.parse_args()
 
     # Convert paths to absolute for clarity
@@ -69,6 +75,7 @@ def main():
     print(f"  Source Model Checkpoint: {abs_model_path}")
     print(f"  Layer Processing Target: {args.layers} layers")
     print(f"  Target Output Location:  {abs_output_dir}")
+    print(f"  Dry-Run Fallbacks:       {args.dry_run}")
     print(f"{'='*60}\n")
 
     if not os.path.exists(abs_model_path):
@@ -86,6 +93,7 @@ def main():
             model_path=args.model_path,
             total_layers=args.layers,
             output_dir=abs_output_dir,
+            dry_run=args.dry_run,
         )
 
         print("\n[OK] Run completed successfully.")

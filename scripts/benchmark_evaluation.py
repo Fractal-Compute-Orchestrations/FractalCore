@@ -550,8 +550,6 @@ def get_rounded_top_bar_path(x, y, width, height, radius):
     return Path(verts, codes)
 
 
-import matplotlib.patches as patches
-
 def plot_distributed_edge_efficiency_index():
     """
     Figure 5: Distributed Edge Orchestration Frontier Index & Empirical Research Matrix.
@@ -716,11 +714,11 @@ def plot_distributed_edge_efficiency_index():
         path = get_rounded_top_bar_path(x[i], 0, bar_width, it["score"], radius=0.20)
         patch = patches.PathPatch(path, facecolor=it["color"], edgecolor='none', zorder=3)
         ax1.add_patch(patch)
-        
+
         y_text = it["score"] - 6.0 if it["score"] > 35 else it["score"] - 4.5
         ax1.text(x[i], y_text, f"{it['display_score']}", ha='center', va='center',
                  color='#FFFFFF', fontsize=15, fontweight='bold', zorder=4)
-        
+
         rank_color = "#0F172A" if i == 0 else "#64748B"
         ax1.text(x[i], it["score"] + 2.5, f"#{i+1}", ha='center', va='bottom',
                  color=rank_color, fontsize=10.5, fontweight='bold' if i == 0 else 'normal', zorder=4)
@@ -764,7 +762,7 @@ def plot_distributed_edge_efficiency_index():
                 ax1.add_artist(ab)
             except Exception as e:
                 print(f"Error loading {it['icon']}: {e}")
-                
+
         name_color = "#0B0F19" if it["is_ours"] else "#1E293B"
         ax1.text(x[i], -0.135, it["framework"], ha='center', va='top',
                  fontsize=10.5, fontweight='bold',
@@ -849,7 +847,7 @@ def main():
     results = benchmark_tinyllama_layers()
     mean_cos_f = float(np.mean(results["fractal_cos"]))
     mean_cos_g = float(np.mean(results["global_cos"]))
-    print(f"\nFinal Measured Results:")
+    print("\nFinal Measured Results:")
     print(f"  FRACTAL Mean Cosine Similarity : {mean_cos_f:.4f}")
     print(f"  Global INT4 Mean Cosine Sim    : {mean_cos_g:.4f}")
     print(f"  FRACTAL Mean Squared Error     : {np.mean(results['fractal_mse']):.6f}")

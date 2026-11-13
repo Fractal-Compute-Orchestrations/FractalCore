@@ -1,0 +1,88 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fractal-core"
+version = "1.0.0"
+description = "Sub-byte INT4 micro-block quantization, Byzantine-resilient aggregation, and distributed model slicing for edge intelligence."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [
+  { name = "Fractal Compute Orchestrations", email = "ahmadhassan.bted@gmail.com" },
+]
+maintainers = [
+  { name = "Fractal Compute Orchestrations", email = "ahmadhassan.bted@gmail.com" },
+]
+keywords = [
+  "federated-learning",
+  "quantization",
+  "int4",
+  "edge-ai",
+  "pipeline-parallelism",
+  "executorch",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Education",
+  "License :: Other/Proprietary License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+server = [
+  "flask>=3.0.0",
+  "flask-cors>=4.0.0",
+  "python-dotenv>=1.0.0",
+  "gunicorn>=21.2.0",
+]
+slicer = [
+  "torch>=2.3.0",
+  "transformers>=4.40.0",
+  "accelerate>=0.29.0",
+]
+firebase = [
+  "firebase-admin>=6.5.0",
+  "google-cloud-firestore>=2.16.0",
+]
+dev = [
+  "pytest>=8.0.0",
+  "ruff>=0.4.0",
+  "build>=1.2.0",
+]
+all = [
+  "fractal-core[server,slicer,firebase]",
+]
+
+[project.scripts]
+fractal = "fractal_quant.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Fractal-Compute-Orchestrations/FractalWorkspace"
+Repository = "https://github.com/Fractal-Compute-Orchestrations/FractalCore"
+Issues = "https://github.com/Fractal-Compute-Orchestrations/FractalCore/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["fractal_quant*", "fractal_server*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "src/fractal_server", "src/inference-model-maker"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]

@@ -1,7 +1,9 @@
+import hmac
 import json
 import os
 import secrets
 import shutil
+import sys
 import threading
 from collections import deque
 from datetime import datetime, timedelta
@@ -11,6 +13,20 @@ from typing import Optional
 import numpy as np
 from dotenv import load_dotenv
 from flask import Flask, jsonify, send_file, request, render_template, redirect, url_for
+
+_SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
+_SRC_DIR = os.path.dirname(_SERVER_DIR)
+for _p in (_SERVER_DIR, _SRC_DIR):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+from fractal_quant.codec import (  # noqa: E402
+    FRQ4_MAGIC,
+    FRQD_MAGIC,
+    quantize_state_dict,
+    unpack_state_dict,
+)
+from fractal_quant.fedavg import federated_average  # noqa: E402
 
 try:
     import tensorflow as tf
@@ -37,16 +53,25 @@ load_dotenv()
 from firebase_reward import _db  # noqa: E402
 from firebase_reward import credit_mbs_for_device  # noqa: E402
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(os.path.dirname(BASE_DIR))
+BASE_DIR = _SERVER_DIR
+PROJECT_ROOT = os.path.dirname(_SRC_DIR)
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 SECRETS_DIR = os.path.join(PROJECT_ROOT, "secrets")
 TENANTS_JSON = os.path.join(SECRETS_DIR, "tenants.json")
 USE_FIRESTORE = True
+ALLOW_ANON_DEMO = os.getenv("FRACTAL_ALLOW_ANON_DEMO", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+SEED_DEMO_TENANTS = os.getenv("FRACTAL_DEMO_SEED", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
-# ── Flask ─────────────────────────────────────────────────────────────────────
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "fractal_system_secure_key_2026_dev_only")
+app.secret_key = os.getenv("SECRET_KEY") or secrets.token_hex(32)
 
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "orchestrate")
@@ -55,6 +80,42 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "orchestrate")
 SHARED_MODEL_DIR = os.path.join(DATA_DIR, "downloads")
 SHARED_MODEL_FILENAME = "0009_model.tflite"
 os.makedirs(SHARED_MODEL_DIR, exist_ok=True)
+
+
+def _safe_join(base_dir: str, filename: str) -> Optional[str]:
+    """Resolve *filename* strictly inside *base_dir*, blocking path traversal."""
+    if not filename or "\x00" in filename:
+        return None
+    cleaned = filename.replace("\\", "/").strip()
+    if "/" in cleaned or cleaned in (".", ".."):
+        return None
+    real_base = os.path.realpath(base_dir)
+    real_target = os.path.realpath(os.path.join(real_base, cleaned))
+    try:
+        if os.path.commonpath([real_base, real_target]) != real_base:
+            return None
+    except ValueError:
+        return None
+    return real_target
+
+
+_VALID_UPDATE_EXTS = (".ckpt", ".frqd", ".frq4", ".npz")
+
+
+def _is_update_filename(name: str) -> bool:
+    return name.endswith(_VALID_UPDATE_EXTS)
+
+
+def _load_update_packet(path: str) -> Optional[dict]:
+    """Load an FRQD compressed bundle or NPZ checkpoint into float32 numpy arrays."""
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    if raw.startswith(FRQD_MAGIC):
+        return unpack_state_dict(raw)
+    if path.endswith(".npz"):
+        with np.load(path, allow_pickle=False) as archive:
+            return {k: archive[k].astype(np.float32) for k in archive.files}
+    return None
 
 # ── TFLOPs ────────────────────────────────────────────────────────────────────
 FLOPS_PER_IMAGE: float = 12.6e6  # MobileNet 28×28, fwd+bwd per image per epoch
@@ -128,6 +189,7 @@ def _load_tokens():
 
 def _save_tokens():
     try:
+        os.makedirs(SECRETS_DIR, exist_ok=True)
         with open(tokens_json, "w") as f:
             json.dump(_token_store, f, indent=2)
     except Exception:
@@ -153,22 +215,32 @@ def _revoke_token(token: str):
         _save_tokens()
 
 
-def _get_auth() -> dict:
-    """Authenticate from X-Auth-Token header with fallback for local demo inspection."""
+def _extract_request_token() -> str:
     token = request.headers.get("X-Auth-Token", "").strip()
+    if token:
+        return token
+    auth_header = request.headers.get("Authorization", "").strip()
+    if auth_header.lower().startswith("bearer "):
+        return auth_header[7:].strip()
+    return ""
+
+
+def _get_auth() -> dict:
+    """Authenticate strictly from X-Auth-Token or Bearer header."""
+    token = _extract_request_token()
     if token:
         with _token_lock:
             _load_tokens()
             auth = _token_store.get(token)
             if auth:
                 return dict(auth)
-    # Dev/demo fallback if accessing dashboard or admin directly
-    if request.path.startswith("/admin") or request.path.startswith("/api/admin"):
-        return {"user": "admin", "role": "admin"}
-    with _tenants_lock:
-        if _tenants:
-            first_user = next(iter(_tenants))
-            return {"user": first_user, "role": "tenant"}
+    if ALLOW_ANON_DEMO:
+        if request.path.startswith("/admin") or request.path.startswith("/api/admin"):
+            return {"user": ADMIN_USERNAME, "role": "admin"}
+        with _tenants_lock:
+            if _tenants:
+                first_user = next(iter(_tenants))
+                return {"user": first_user, "role": "tenant"}
     return {}
 
 
@@ -245,6 +317,10 @@ class TenantSession:
             "segments_total": 0,
             "segments_dispatched": 0,
             "clients_uploaded": 0,
+            "bytes_received": 0,
+            "bytes_uncompressed": 0,
+            "compression_ratio": 1.0,
+            "aggregation_backend": "none",
         }
 
         self.max_tflops: float = 0.0
@@ -313,8 +389,13 @@ class TenantSession:
             "num_clients": cfg["MAX_CLIENTS"],
             "assigned_devices": list(self.assigned_devices),
             "clients_uploaded": self.state["clients_uploaded"],
+            "bytes_received": self.state.get("bytes_received", 0),
+            "bytes_uncompressed": self.state.get("bytes_uncompressed", 0),
+            "compression_ratio": round(self.state.get("compression_ratio", 1.0), 3),
+            "aggregation_backend": self.state.get("aggregation_backend", "none"),
             "tflite_model_size_kb": tflite_kb,
-            "global_model_exists": os.path.exists(self.global_ckpt_path),
+            "global_model_exists": os.path.exists(self.global_ckpt_path)
+            or os.path.exists(self.global_ckpt_path.replace(".ckpt", ".frqd")),
             "remaining_tflops": round(self.remaining_tflops, 6),
             "max_tflops": round(self.max_tflops, 6),
             "tflops_per_task": round(_tflops_per_task(cfg), 6),
@@ -335,7 +416,7 @@ class TenantSession:
                 "INPUT_SHAPE": cfg["INPUT_SHAPE"],
                 "NUM_CLASSES": cfg["NUM_CLASSES"],
                 "DATASET": cfg.get("DATASET", "Fashion-MNIST"),
-                "ARCHITECTURE": cfg.get("ARCHITECTURE", "—"),
+                "ARCHITECTURE": cfg.get("ARCHITECTURE", "unset"),
                 "IMG_SIZE": cfg["INPUT_SHAPE"][0] if cfg["INPUT_SHAPE"] else 28,
             },
             "log": log_snap,
@@ -468,16 +549,38 @@ class TenantSession:
 
         threading.Thread(target=_run, daemon=True).start()
 
-    def do_federated_averaging(self):
-        self.add_log("Federated Averaging: Starting...", "info")
-        files = [
-            os.path.join(self.upload_dir, f)
-            for f in os.listdir(self.upload_dir)
-            if f.endswith(".ckpt")
-        ]
-        if not files:
-            self.add_log("No checkpoints found.", "warn")
-            return
+    def _aggregate_packed_updates(self, files: list) -> int:
+        updates = []
+        for path in files:
+            try:
+                state = _load_update_packet(path)
+                if state:
+                    updates.append(state)
+                    self.add_log(
+                        f"Aggregated FRQD/NPZ: {os.path.basename(path)}", "success"
+                    )
+            except Exception as e:
+                self.add_log(f"Error: {os.path.basename(path)}: {e}", "error")
+        if not updates:
+            return 0
+        merged = federated_average(updates)
+        frqd_path = self.global_ckpt_path.replace(".ckpt", ".frqd")
+        packed_global, _ = quantize_state_dict(merged)
+        os.makedirs(os.path.dirname(frqd_path), exist_ok=True)
+        with open(frqd_path, "wb") as fh:
+            fh.write(packed_global)
+        npz_path = self.global_ckpt_path.replace(".ckpt", ".npz")
+        np.savez(npz_path, **merged)
+        self.state["aggregation_backend"] = "fractal_quant.frqd"
+        return len(updates)
+
+    def _aggregate_tf_checkpoints(self, files: list) -> int:
+        if tf is None:
+            self.add_log(
+                "TensorFlow unavailable for legacy .ckpt files; upload FRQD/NPZ updates.",
+                "error",
+            )
+            return 0
         reader = tf.train.load_checkpoint(files[0])
         keys = list(reader.get_variable_to_shape_map().keys())
         acc = {k: None for k in keys}
@@ -493,11 +596,7 @@ class TenantSession:
             except Exception as e:
                 self.add_log(f"Error: {os.path.basename(ckpt)}: {e}", "error")
         if n_ok == 0:
-            self.add_log("ABORT: No valid checkpoints.", "error")
-            return
-        # n_ok > 0 guarantees every acc[k] was assigned in the loop above,
-        # but Pylance can't infer that. Use explicit narrowing so the
-        # `None`/`int` operator error disappears without losing type safety.
+            return 0
         vals = []
         for k in keys:
             v = acc[k]
@@ -509,9 +608,41 @@ class TenantSession:
             data=vals,
             name="fed_save",
         )
+        self.state["aggregation_backend"] = "tensorflow.ckpt"
+        return n_ok
+
+    def do_federated_averaging(self):
+        self.add_log("Federated Averaging: Starting...", "info")
+        files = [
+            os.path.join(self.upload_dir, f)
+            for f in sorted(os.listdir(self.upload_dir))
+            if _is_update_filename(f)
+        ]
+        if not files:
+            self.add_log("No checkpoints found.", "warn")
+            return
+        packed_files = []
+        tf_files = []
+        for path in files:
+            with open(path, "rb") as fh:
+                head = fh.read(4)
+            if head == FRQD_MAGIC or path.endswith(".npz"):
+                packed_files.append(path)
+            else:
+                tf_files.append(path)
+        if packed_files:
+            n_ok = self._aggregate_packed_updates(packed_files)
+        else:
+            n_ok = self._aggregate_tf_checkpoints(tf_files)
+        if n_ok == 0:
+            self.add_log("ABORT: No valid checkpoints.", "error")
+            return
         self.state["aggregation_done"] = True
         self.state["round"] += 1
-        self.add_log(f"Global model saved. Round {self.state['round']}.", "success")
+        self.add_log(
+            f"Global model saved ({self.state['aggregation_backend']}). Round {self.state['round']}.",
+            "success",
+        )
         if self.state["round"] > self.config["MAX_ROUNDS"]:
             self.state["finished"] = True
             self.add_log(f"All {self.config['MAX_ROUNDS']} rounds complete.", "success")
@@ -560,6 +691,7 @@ def _save_tenants():
                 }
             )
     try:
+        os.makedirs(SECRETS_DIR, exist_ok=True)
         with open(TENANTS_JSON, "w") as f:
             json.dump({"tenant_counter": _tenant_counter, "tenants": data}, f, indent=2)
         print(f"[+] Saved tenants to {TENANTS_JSON}")
@@ -783,8 +915,28 @@ def _seed_demo_tenant():
     print("[+] Seeded 3 demo tenants (lab_alpha, edge_vision_lab, mesh_nlp_research).")
 
 
-def _load_tenants():
-    """Load tenants from local tenants.json on server startup, or seed demo if empty."""
+_initialized = False
+_init_lock = threading.Lock()
+
+
+def ensure_initialized(seed_if_empty: Optional[bool] = None):
+    """Idempotently initialize tenant state on WSGI or direct startup."""
+    global _initialized
+    with _init_lock:
+        if _initialized:
+            return
+        _load_tenants(seed_if_empty=seed_if_empty)
+        _initialized = True
+
+
+@app.before_request
+def _bootstrap_on_request():
+    if not _initialized and request.path != "/api/health":
+        ensure_initialized()
+
+
+def _load_tenants(seed_if_empty: Optional[bool] = None):
+    """Load tenants from local tenants.json on server startup."""
     global _tenant_counter
     loaded = False
     if os.path.exists(TENANTS_JSON):
@@ -819,7 +971,8 @@ def _load_tenants():
         except Exception as e:
             print(f"[!] Could not load tenants.json: {e}")
 
-    if not loaded or not _tenants:
+    should_seed = SEED_DEMO_TENANTS if seed_if_empty is None else seed_if_empty
+    if should_seed and (not loaded or not _tenants):
         _seed_demo_tenant()
 
 
@@ -882,36 +1035,52 @@ def _get_next_tenant_rr():
 # ─────────────────────────────────────────────────────────────────────────────
 #  Auth decorators  — token-only, no cookie fallback
 # ─────────────────────────────────────────────────────────────────────────────
-def admin_required(f):
-    def w(*a, **kw):
-        if _get_auth().get("role") != "admin":
-            return redirect(url_for("login"))
-        return f(*a, **kw)
+def _require_role(required_role: str):
+    def decorator(f):
+        def w(*a, **kw):
+            auth = _get_auth()
+            role = auth.get("role")
+            if role != required_role:
+                if request.path.startswith("/api/"):
+                    status = 401 if not auth else 403
+                    msg = (
+                        "Authentication required."
+                        if not auth
+                        else "Insufficient role permissions."
+                    )
+                    return jsonify({"error": msg}), status
+                return redirect(url_for("login"))
+            return f(*a, **kw)
 
-    w.__name__ = f.__name__
-    return w
+        w.__name__ = f.__name__
+        return w
+
+    return decorator
 
 
-def tenant_required(f):
-    def w(*a, **kw):
-        if _get_auth().get("role") != "tenant":
-            return redirect(url_for("login"))
-        return f(*a, **kw)
-
-    w.__name__ = f.__name__
-    return w
+admin_required = _require_role("admin")
+tenant_required = _require_role("tenant")
 
 
 def _cur_tenant() -> str:
     return _get_auth().get("user", "")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Auth routes
-# ─────────────────────────────────────────────────────────────────────────────
+@app.route("/api/health")
+def api_health():
+    return jsonify(
+        {
+            "status": "ok",
+            "tenants": len(_tenants),
+            "frqd_enabled": True,
+            "tensorflow_available": tf is not None,
+        }
+    )
+
+
+# Auth routes
 @app.route("/")
 def index():
-    # Without a token header we can't know who they are — send to login
     return redirect(url_for("login"))
 
 
@@ -921,13 +1090,12 @@ def login():
         u = request.form.get("username", "").strip()
         p = request.form.get("password", "")
 
-        if u == ADMIN_USERNAME and p == ADMIN_PASSWORD:
+        if u == ADMIN_USERNAME and hmac.compare_digest(p, ADMIN_PASSWORD):
             token = _issue_token(u, "admin")
-            # Return a page that stores the token in sessionStorage then redirects
             return _token_redirect(token, "/admin")
 
         t = _tenants.get(u)
-        if t and t["password"] == p:
+        if t and hmac.compare_digest(t["password"], p):
             if not t["active"]:
                 return render_template("login.html", error="Account inactive.")
             token = _issue_token(u, "tenant")
@@ -1337,10 +1505,49 @@ def upload_checkpoint():
         else float(s.config.get("CHECKPOINT_REWARD_RATE", 33.3333) or 33.3333)
     )
 
+    safe_task_id = "".join(
+        ch if ch.isalnum() or ch in ("_", "-") else "_" for ch in task_Id
+    )
+    safe_dev_id = "".join(
+        ch if ch.isalnum() or ch in ("_", "-") else "_" for ch in target_device_id
+    )
+    raw_bytes = f.read()
+    ext = ".ckpt"
+    if raw_bytes.startswith(FRQD_MAGIC):
+        try:
+            unpacked = unpack_state_dict(raw_bytes)
+        except Exception as exc:
+            return f"Invalid FRQD packet: {exc}", 400
+        ext = ".frqd"
+        uncompressed_bytes = sum(arr.size * 4 for arr in unpacked.values())
+        s.state["bytes_received"] = s.state.get("bytes_received", 0) + len(raw_bytes)
+        s.state["bytes_uncompressed"] = (
+            s.state.get("bytes_uncompressed", 0) + uncompressed_bytes
+        )
+        if s.state["bytes_received"] > 0:
+            s.state["compression_ratio"] = (
+                s.state["bytes_uncompressed"] / s.state["bytes_received"]
+            )
+    elif raw_bytes.startswith(FRQ4_MAGIC):
+        ext = ".frq4"
+        s.state["bytes_received"] = s.state.get("bytes_received", 0) + len(raw_bytes)
+    elif (f.filename or "").endswith(".npz"):
+        ext = ".npz"
+        s.state["bytes_received"] = s.state.get("bytes_received", 0) + len(raw_bytes)
+    else:
+        s.state["bytes_received"] = s.state.get("bytes_received", 0) + len(raw_bytes)
+
     ts = int(datetime.now().timestamp() * 1000)
-    fn = f"{task_Id}_{target_device_id}_{ts}.ckpt"
-    f.save(os.path.join(s.upload_dir, fn))
-    s.add_log(f"Received: {fn}", "success")
+    fn = f"{safe_task_id}_{safe_dev_id}_{ts}{ext}"
+    save_path = _safe_join(s.upload_dir, fn)
+    if save_path is None:
+        return "Invalid upload target filename.", 400
+    with open(save_path, "wb") as out_f:
+        out_f.write(raw_bytes)
+    s.add_log(
+        f"Received: {fn} ({len(raw_bytes)} bytes, ratio={s.state.get('compression_ratio', 1.0):.2f}x)",
+        "success",
+    )
 
     if target_device_id and target_device_id.lower() not in (
         "unknown",
@@ -1357,12 +1564,12 @@ def upload_checkpoint():
             f"Skipping reward: No valid device ID resolved for task {task_Id}.", "warn"
         )
 
-    received = [x for x in os.listdir(s.upload_dir) if x.endswith(".ckpt")]
+    received = [x for x in os.listdir(s.upload_dir) if _is_update_filename(x)]
     s.state["clients_uploaded"] = len(received)
     s.add_log(f"Checkpoints: {len(received)}/{s.config['MAX_CLIENTS']}", "info")
 
     if len(received) >= s.config["MAX_CLIENTS"]:
-        s.add_log("All clients reported — triggering Federated Averaging.", "info")
+        s.add_log("All clients reported; triggering Federated Averaging.", "info")
 
         def _agg():
             s.do_federated_averaging()
@@ -1378,7 +1585,9 @@ def upload_checkpoint():
                 }
             )
             if s.config.get("AUTO_DELETE_CHECKPOINTS", False):
-                for x in [x for x in os.listdir(s.upload_dir) if x.endswith(".ckpt")]:
+                for x in [
+                    x for x in os.listdir(s.upload_dir) if _is_update_filename(x)
+                ]:
                     try:
                         os.remove(os.path.join(s.upload_dir, x))
                     except OSError:
@@ -1397,15 +1606,7 @@ def upload_checkpoint():
 
 
 def _resolve_tenant(tenant_id: str, task_id: str, filename: str = "") -> str:
-    """Resolve the owning tenant for a download request.
-
-    Resolution order:
-      1. Explicit tenant_id param (if valid).
-      2. task_id lookup in _task_download_map.
-      3. Parse the tenant username prefix embedded in the filename
-         (files are named  {username}_images_NNN.bin / {username}_labels_NNN.bin).
-      4. Filesystem scan fallback (last resort).
-    """
+    """Resolve the owning tenant for a download request."""
     if tenant_id:
         with _tenants_lock:
             if tenant_id in _tenants:
@@ -1417,9 +1618,7 @@ def _resolve_tenant(tenant_id: str, task_id: str, filename: str = "") -> str:
         if found:
             return found
 
-    # Parse username prefix:  "{username}_images_NNN.bin" or "{username}_labels_NNN.bin"
     if filename:
-        # All tenant-prefixed files follow the pattern  <username>_images_NNN.bin
         for sep in ("_images_", "_labels_"):
             if sep in filename:
                 candidate = filename.split(sep)[0]
@@ -1428,19 +1627,17 @@ def _resolve_tenant(tenant_id: str, task_id: str, filename: str = "") -> str:
                         return candidate
                 break
 
-        # Last-resort: scan every tenant's download dir
         with _tenants_lock:
             items = list(_tenants.items())
         for u, t in items:
-            fp = os.path.join(t["session"].download_dir, filename)
-            if os.path.exists(fp):
+            fp = _safe_join(t["session"].download_dir, filename)
+            if fp and os.path.exists(fp):
                 return u
 
     return ""
 
 
-@app.route("/download/images")
-def download_images():
+def _serve_tenant_download():
     fn = request.args.get("filename", "").strip()
     if not fn:
         return "filename parameter required.", 400
@@ -1454,37 +1651,30 @@ def download_images():
     t = _tenants.get(tid)
     if not t:
         return f"Tenant '{tid}' not found.", 404
-    fp = os.path.join(t["session"].download_dir, fn)
+    fp = _safe_join(t["session"].download_dir, fn)
+    if fp is None:
+        return "Invalid filename.", 400
     if not os.path.exists(fp):
         return f"File '{fn}' not found in tenant '{tid}' bins dir.", 404
     return send_file(fp, as_attachment=True)
+
+
+@app.route("/download/images")
+def download_images():
+    return _serve_tenant_download()
 
 
 @app.route("/download/labels")
 def download_labels():
-    fn = request.args.get("filename", "").strip()
-    if not fn:
-        return "filename parameter required.", 400
-    tid = _resolve_tenant(
-        request.args.get("tenant_id", "").strip(),
-        request.args.get("task_id", "").strip(),
-        fn,
-    )
-    if not tid:
-        return f"Cannot resolve tenant for '{fn}'. Include tenant_id or task_id.", 400
-    t = _tenants.get(tid)
-    if not t:
-        return f"Tenant '{tid}' not found.", 404
-    fp = os.path.join(t["session"].download_dir, fn)
-    if not os.path.exists(fp):
-        return f"File '{fn}' not found in tenant '{tid}' bins dir.", 404
-    return send_file(fp, as_attachment=True)
+    return _serve_tenant_download()
 
 
 @app.route("/download/model")
 def download_model():
-    fn = request.args.get("filename", SHARED_MODEL_FILENAME)
-    fp = os.path.join(SHARED_MODEL_DIR, fn)
+    fn = request.args.get("filename", SHARED_MODEL_FILENAME).strip()
+    fp = _safe_join(SHARED_MODEL_DIR, fn)
+    if fp is None:
+        return "Invalid filename.", 400
     return (
         send_file(fp, as_attachment=True)
         if os.path.exists(fp)
@@ -1493,7 +1683,8 @@ def download_model():
 
 
 if __name__ == "__main__":
-    _load_tenants()  # Restore tenants from Firestore or local json on startup
+    seed_flag = os.getenv("FRACTAL_DEMO_SEED", "true").lower() in ("1", "true", "yes")
+    ensure_initialized(seed_if_empty=seed_flag)
     print("=" * 60)
     print("  FRACTAL  .  Multi-Tenant Federated Learning Server")
     print("  Admin  -> http://127.0.0.1:5000/admin")

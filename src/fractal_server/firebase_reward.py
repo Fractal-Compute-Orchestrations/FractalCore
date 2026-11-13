@@ -1,44 +1,46 @@
+import json
 import os
 import sys
-import json
+from typing import Optional
 
 # Fix gRPC DNS resolver hangs on Windows by delegating to the native OS resolver
 os.environ["GRPC_DNS_RESOLVER"] = "native"
 
-try:
-    import firebase_admin
-    from firebase_admin import credentials, firestore as fb_firestore
-    from google.cloud.firestore_v1 import Increment
-    from google.cloud.firestore_v1.base_query import FieldFilter
-except ImportError:
-    firebase_admin = None
-    credentials = None
-    fb_firestore = None
-    Increment = None
-    FieldFilter = None
-from typing import Optional
-
-# ── Secrets Path Configuration ────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(BASE_DIR))
 SECRETS_DIR = os.path.join(PROJECT_ROOT, "secrets")
 _SERVICE_ACCOUNT_PATH = os.path.join(SECRETS_DIR, "firebase", "service-account.json")
 
-# ── Firebase Initialization ───────────────────────────────────────────────────
+firebase_admin = None
+credentials = None
+fb_firestore = None
+Increment = None
+FieldFilter = None
 _db = None
-if firebase_admin is not None:
-    if not firebase_admin._apps:
-        try:
+
+if os.path.exists(_SERVICE_ACCOUNT_PATH):
+    try:
+        import firebase_admin as _fb_mod
+        from firebase_admin import credentials as _fb_creds, firestore as _fb_fs
+        from google.cloud.firestore_v1 import Increment as _Increment
+        from google.cloud.firestore_v1.base_query import FieldFilter as _FieldFilter
+
+        firebase_admin = _fb_mod
+        credentials = _fb_creds
+        fb_firestore = _fb_fs
+        Increment = _Increment
+        FieldFilter = _FieldFilter
+        if not firebase_admin._apps:
             _fb_app = firebase_admin.initialize_app(
                 credentials.Certificate(_SERVICE_ACCOUNT_PATH)
             )
             _db = fb_firestore.client()
             print("[Firebase] Initialized successfully.")
-        except Exception as e:
-            print(f"[Firebase] Initialization failed: {e}")
-            _db = None
-    else:
-        _db = fb_firestore.client()
+        else:
+            _db = fb_firestore.client()
+    except Exception as e:
+        print(f"[Firebase] Initialization failed: {e}")
+        _db = None
 
 
 # ── Internal Helpers ──────────────────────────────────────────────────────────
@@ -102,19 +104,10 @@ def _get_email_by_device_id(device_id: str) -> Optional[str]:
 
         print(f"[Firebase] WARNING: No device found for ID '{device_id}'.")
 
-        # ── Step 3: Dynamic fallback to the first registered email in the DB ───
+        # Unregistered devices must never fall back to another user's account.
         print(
-            "[Firebase] Fallback: Querying first available registered device in the database..."
+            f"[Firebase] No registered user found for device_id='{device_id}'; skipping reward."
         )
-        default_docs = _db.collection("registered_devices").limit(1).stream()
-        for doc in default_docs:
-            data = doc.to_dict()
-            fallback_email = data.get("email")
-            if fallback_email:
-                print(
-                    f"[Firebase] Fallback SUCCESS: Matched unregistered ID '{device_id}' to registered database email '{fallback_email}'."
-                )
-                return fallback_email
 
     except Exception as e:
         print(f"[Firebase] Field query error: {e}")

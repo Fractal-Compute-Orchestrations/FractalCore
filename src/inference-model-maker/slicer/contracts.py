@@ -1,11 +1,11 @@
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-try:
+if TYPE_CHECKING:
     import torch
 
     TorchModule = torch.nn.Module
-except ImportError:
+else:
     TorchModule = Any  # type: ignore[misc,assignment]
 
 

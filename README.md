@@ -6,17 +6,33 @@
 ### High-Performance Orchestration Engine, Federated Aggregator, and Model Graph Slicer
 
 [![Version](https://img.shields.io/badge/version-1.0.0-black?style=for-the-badge)](https://semver.org)
-[![License](https://img.shields.io/badge/License-Proprietary_Non--Commercial_v3.0-black?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/License-Source_Available_Non_Commercial_v3.1-black?style=for-the-badge)](LICENSE)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Fractal-Compute-Orchestrations/FractalCore/blob/main/examples/colab_quickstart.ipynb)
 [![Design](https://img.shields.io/badge/Design_Case_Study-Behance-black?style=for-the-badge&logo=behance)](https://www.behance.net/gallery/221459335/Fractal)
 [![Security](https://img.shields.io/badge/security-hardened-black?style=for-the-badge)](SECURITY.md)
-[![Maintainer](https://img.shields.io/badge/maintained_by-Ahmad_Hassan_(B--Ted)-black?style=for-the-badge)](https://github.com/Fractal-Compute-Orchestrations)
+[![Entity](https://img.shields.io/badge/Fractal_Compute_Orchestrations-Institutional_Research-black?style=for-the-badge)](https://github.com/Fractal-Compute-Orchestrations)
 
 **FractalCore is the central server, control plane, and model compilation engine for the Fractal decentralized compute ecosystem.**
 
-[Overview](#overview) | [Key Results & Benchmarks](#empirical-benchmarks--performance-evaluation) | [Industry & Community Recognition](#industry--community-recognition) | [Control Plane UI](#control-plane-web-interface) | [Architecture](#system-architecture) | [Core Components](#core-components) | [Data Flow](#data-flow-and-lifecycle) | [API Summary](#api-reference-summary) | [Deployment](#deployment-and-execution) | [Security](#security-model) | [Theoretical Foundations](#theoretical-foundations--references)
+[Overview](#overview) | [Quickstart SDK](#quickstart-sdk--cli) | [Key Results & Benchmarks](#empirical-benchmarks--performance-evaluation) | [Industry & Community Recognition](#industry--community-recognition) | [Control Plane UI](#control-plane-web-interface) | [Architecture](#system-architecture) | [Core Components](#core-components) | [Data Flow](#data-flow-and-lifecycle) | [API Summary](#api-reference-summary) | [Deployment](#deployment-and-execution) | [Security](#security-model) | [Theoretical Foundations](#theoretical-foundations--references)
 
 ---
 </div>
+
+## Quickstart SDK & CLI
+
+Install the lightweight runtime package (`numpy` core codec + CLI, optional server and slicer extras) and run the reproducible outlier-resilience benchmark locally in seconds:
+
+```bash
+pip install -e ".[server]"
+fractal doctor
+fractal bench
+python scripts/quickstart_demo.py
+```
+
+Or run the zero-setup walkthrough in [examples/colab_quickstart.ipynb](examples/colab_quickstart.ipynb).
+
+---
 
 ## Overview
 
@@ -448,14 +464,19 @@ FractalCore aggregation engine, model graph slicing pipeline, and multi-tenant t
 
 ---
 
-## Governance & Licensing
+## Governance, Entity Ownership & Licensing
 
-FractalCore is proprietary, source-available software licensed under the [Fractal Proprietary Source-Available & Non-Commercial Restrictive License v3.0](LICENSE). All Rights Reserved. Commercial use strictly prohibited without written authorization.
+FractalCore is source-available research and systems software owned exclusively by **Fractal Compute Orchestrations** and governed by the [FRACTAL Proprietary Source-Available & Non-Commercial Restrictive License v3.1](LICENSE) (see [NOTICE](NOTICE) and [CITATION.cff](CITATION.cff)).
+
+* **Permitted without fee:** Non-monetized personal study, academic research with mandatory attribution, and non-commercial reproducibility verification.
+* **Strictly prohibited without a signed Commercial License:** Building products, commercial wrappers, managed or hosted SaaS/PaaS APIs, startups or spin-off companies, consulting services, or internal corporate deployments.
+
+For commercial licensing or institutional partnerships, contact **Fractal Compute Orchestrations** (`ahmadhassan.bted@gmail.com`).
 
 ---
 
 <div align="center">
 
-**FractalCore**: Architected and maintained by **[Ahmad Hassan (B-Ted)](https://github.com/Fractal-Compute-Orchestrations)**.
+**FractalCore** is engineered and governed by **[Fractal Compute Orchestrations](https://github.com/Fractal-Compute-Orchestrations)**.
 
 </div>
