@@ -32,7 +32,6 @@ Architecture Notes
 from __future__ import annotations
 
 import torch
-from transformers import AutoModelForCausalLM
 
 
 def load_model(
@@ -76,6 +75,14 @@ def load_model(
     print(
         "[Workstation-1] Enforcing device_map='cpu', dtype=float16, local_files_only=True"
     )
+
+    try:
+        from transformers import AutoModelForCausalLM
+    except ImportError as exc:
+        raise ImportError(
+            "The 'transformers' package is required for step_1_ingestor.load_model(). "
+            "Install it via `pip install transformers accelerate`."
+        ) from exc
 
     model: torch.nn.Module = AutoModelForCausalLM.from_pretrained(
         model_path,
